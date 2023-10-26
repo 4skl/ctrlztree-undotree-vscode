@@ -1,9 +1,14 @@
-# ctrlztree README
+# CtrlZTree AKA UndoTree, have a better undo history on VSCode
 
-This is the README for your extension "ctrlztree". After writing up a brief description, we recommend including the following sections.
+This project aim to create an undotree extension kinda like [undotree for Vim](https://github.com/mbbill/undotree).
+This is based on this project [CtrlZTree](https://github.com/4skl/CtrlZTree) that I later noticed existed for Vim but not VSCode.
 
 ## Features
 
+Project under development, it aims at creating an undotree, show it in a graphical way to find a later version and in the future add the possibility to save it to a file.
+This will avoid loosing informations, and perhaps solve the problem of loosing history when restarting VSCode or closing a window then re-opening it.
+
+# TODO
 Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
 
 For example if there is an image subfolder under your extension project workspace:
