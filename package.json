@@ -1,0 +1,71 @@
+{
+  "name": "ctrlztree",
+  "displayName": "CtrlZTree",
+  "description": "Keep an history of your changes like git but for undo (ctrl-z), without commit to your git repo.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.83.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ctrlztree.showtree",
+        "title": "Show CtrlZTree"
+      },
+      {
+        "command": "ctrlztree.branchforward",
+        "title": "Move Forward in CtrlZTree (Ctrl+Y or Ctrl+Shift+Z)"
+      },
+      {
+        "command": "ctrlztree.branchbackward",
+        "title": "Move Backward in CtrlZTree (Ctrl+Z)"
+      },
+      {
+        "command": "ctrlztree.newbranch",
+        "title": "You create a new branch in CtrlZTree (Modified file after a Ctrl+Z)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ctrlztree.branchbackward",
+        "key": "ctrl+z",
+        "mac": "cmd+z"
+      },
+      {
+        "command": "ctrlztree.branchforward",
+        "key": "ctrl+y",
+        "mac": "cmd+y"
+      },
+      {
+        "command": "ctrlztree.branchforward",
+        "key": "ctrl+y",
+        "mac": "cmd+y"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.83.0",
+    "@types/mocha": "^10.0.2",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^6.7.3",
+    "@typescript-eslint/parser": "^6.7.3",
+    "eslint": "^8.50.0",
+    "glob": "^10.3.3",
+    "mocha": "^10.2.0",
+    "typescript": "^5.2.2",
+    "@vscode/test-electron": "^2.3.4"
+  }
+}
