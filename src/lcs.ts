@@ -45,10 +45,10 @@ export class DiffAdd {
 
 export class DiffDel {
     start: number; //start index of the deletion
-    length: number; //length of the deletion
-    constructor(start: number, length: number) {
+    text: string;
+    constructor(start: number, text: string) {
         this.start = start;
-        this.length = length;
+        this.text = text;
     }
 }
 export class Diff {
@@ -62,7 +62,7 @@ export class Diff {
     apply(input: string): string {
         let output: string = input;
         for (let del of this.deletions) {
-            output = output.slice(0, del.start) + output.slice(del.start + del.length);
+            output = output.slice(0, del.start) + output.slice(del.start + del.text.length);
         }
         for (let add of this.additions) {
             output = output.slice(0, add.start) + add.text + output.slice(add.start);
@@ -72,35 +72,63 @@ export class Diff {
 
     reverse(input: string): string {
         let output: string = input;
-        for (let add of this.additions) {
-            output = output.slice(0, add.start) + output.slice(add.start + add.text.length);
+        for (let del of this.additions) {
+            output = output.slice(0, del.start) + output.slice(del.start + del.text.length);
         }
-        for (let del of this.deletions) {
-            output = output.slice(0, del.start) + del.text + output.slice(del.start);
+        for (let add of this.deletions) {
+            output = output.slice(0, add.start) + add.text + output.slice(add.start);
         }
         return output;
     }
+
 } 
 
 export function diff_object(input1: string, input2: string) : Diff {
     const [_, cache, start, i_end, j_end] = lcs_diff(input1, input2);
     const additions: Array<DiffAdd> = [];
     const deletions: Array<DiffDel> = [];
-    let i = cache.length - 1; //use i_end instead ?
-    let j = cache[0].length - 1; //use j_end instead ?
-    //todo can be optimised by concatening additions and deletions (avoid length == 1)
+    let i = i_end; //use i_end instead ?
+    let j = j_end; //use j_end instead ?
+    let actual_diff: DiffAdd | DiffDel | null = null;
+    console.log(cache, start, i_end, j_end);
+    console.log(input1, input2);
     while(i > start && j > start){
         if(input1[i-1] === input2[j-1]){
             i--;
             j--;
         }
-        else if(cache[i][j-1].length >= cache[i-1][j].length){
-            additions.push(new DiffAdd(i, input2[j-1]));
+        else if(cache[i-start][j-start-1].length >= cache[i-start-1][j-start].length){
+            if(actual_diff !== null){
+                if(actual_diff instanceof DiffAdd){
+                    actual_diff.text = input2[j-1] + actual_diff.text;
+                }else{
+                    deletions.push(actual_diff);
+                    actual_diff = new DiffAdd(i, input2[j-1]);
+                }
+            }else{
+                actual_diff = new DiffAdd(i, input2[j-1]);
+            }
             j--;
         }
         else{
-            deletions.push(new DiffDel(i, 1));
+            if(actual_diff !== null){
+                if(actual_diff instanceof DiffDel){
+                    actual_diff.text = input1[i-1] + actual_diff.text;
+                }else{
+                    additions.push(actual_diff);
+                    actual_diff = new DiffDel(i, input1[i-1]);
+                }
+            }else{
+                actual_diff = new DiffDel(i, input1[i-1]);
+            }
             i--;
+        }
+    }
+    if(actual_diff !== null){
+        if(actual_diff instanceof DiffAdd){
+            additions.push(actual_diff);
+        }else{
+            deletions.push(actual_diff);
         }
     }
     return new Diff(additions, deletions);

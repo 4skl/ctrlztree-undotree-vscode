@@ -28,6 +28,10 @@
       {
         "command": "ctrlztree.newbranch",
         "title": "You create a new branch in CtrlZTree (Modified file after a Ctrl+Z)"
+      },
+      {
+        "command": "ctrlztree.debugbranch",
+        "title": "Debug a branch in CtrlZTree"
       }
     ],
     "keybindings": [
@@ -43,8 +47,8 @@
       },
       {
         "command": "ctrlztree.branchforward",
-        "key": "ctrl+y",
-        "mac": "cmd+y"
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z"
       }
     ]
   },
