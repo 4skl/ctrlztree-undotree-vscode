@@ -1,186 +1,373 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
+import { generateDiff, applyDiff, serializeDiff, deserializeDiff } from './lcs';
 
-import { sha256 } from 'js-sha256';
-
-import { lcs_diff, Diff, diff_object } from "./lcs";
-
-//todo binary files check, use bytes instead of string ?
-
-//* Important thing to understand, the CtrlZTree is a tree of diffs, only the head node is the whole file.
-//* ^...so the head node moving, some nodes will be, and added to the tree, in case of an undo not already registered in the tree
-class CtrlZTree {
-	hash: string; //if head node hash is validating the actual file state
-	diff: Diff; // diff between this and parent
-	parent?: CtrlZTree;
-	children: Array<CtrlZTree>;
-	constructor(hash: string, diff: Diff, parent?: CtrlZTree, children?: Array<CtrlZTree>) {
-		this.hash = hash;
-		this.diff = diff;
-		this.parent = parent;
-		if(children === undefined) {
-			this.children = [];
-		}else{
-			this.children = children;
-		}
-	}
-};
-/*
-//todo check if using document.uri.path is better than document.fileName or document.uri.external
-declare global {
-	//todo rewind tree if file is closed and persistant storage activated ?
-	//todo remove file if closed ? (or keep it in memory, thus solving file closed history problem)
-	var ctrlztree_full: {[uri: string]: CtrlZTree}; // Each CtrlZTree heads for each files
+interface TreeNode {
+    hash: string;
+    parent: string | null;
+    children: string[];
+    diff: string | null; // Serialized diff from parent to this node
 }
-*/
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+
+class CtrlZTree {
+    private nodes: Map<string, TreeNode>;
+    private head: string | null;
+    private rootContent: string; // Store root content to reconstruct any state
+
+    constructor(initialContent: string) {
+        this.nodes = new Map<string, TreeNode>();
+        this.head = null;
+        this.rootContent = initialContent;
+        
+        // Create the root node
+        const rootHash = this.calculateHash(initialContent);
+        const rootNode: TreeNode = {
+            hash: rootHash,
+            parent: null,
+            children: [],
+            diff: null
+        };
+        
+        this.nodes.set(rootHash, rootNode);
+        this.head = rootHash;
+    }
+
+    private calculateHash(content: string): string {
+        return crypto.createHash('sha256').update(content).digest('hex');
+    }
+
+    // Get the current content by applying all diffs from root to head
+    private reconstructContent(hash: string): string {
+        const path = this.getPathToRoot(hash);
+        let content = this.rootContent;
+        
+        // Apply diffs in reverse order (from root to target)
+        for (let i = path.length - 2; i >= 0; i--) {
+            const node = this.nodes.get(path[i])!;
+            if (node.diff) {
+                const diffOps = deserializeDiff(node.diff);
+                content = applyDiff(content, diffOps);
+            }
+        }
+        
+        return content;
+    }
+
+    // Get an array of hashes representing the path from the given hash to the root
+    private getPathToRoot(hash: string): string[] {
+        const path: string[] = [];
+        let currentHash = hash;
+        
+        while (currentHash) {
+            path.push(currentHash);
+            const node = this.nodes.get(currentHash);
+            if (!node || node.parent === null) {
+                break;
+            }
+            currentHash = node.parent;
+        }
+        
+        return path;
+    }
+
+    // Set new content and compute diff
+    set(content: string): string {
+        const hash = this.calculateHash(content);
+        
+        // Check if node already exists
+        if (this.nodes.has(hash)) {
+            this.head = hash;
+            return hash;
+        }
+
+        // Get current content to compute diff
+        const currentContent = this.head ? this.reconstructContent(this.head) : '';
+        
+        // Create diff
+        const diffOps = generateDiff(currentContent, content);
+        const serializedDiff = serializeDiff(diffOps);
+        
+        // Create new node
+        const node: TreeNode = {
+            hash,
+            parent: this.head,
+            children: [],
+            diff: serializedDiff
+        };
+
+        // If there's a parent, add this node as child
+        if (this.head) {
+            const parent = this.nodes.get(this.head)!;
+            parent.children.push(hash);
+        }
+
+        this.nodes.set(hash, node);
+        this.head = hash;
+        return hash;
+    }
+
+    // Move head to parent node (undo)
+    z(): string | null {
+        if (!this.head) { return null; }
+        
+        const currentNode = this.nodes.get(this.head)!;
+        if (currentNode.parent) {
+            this.head = currentNode.parent;
+            return this.head;
+        }
+        return null;
+    }
+
+    // Move head to child (redo) or return list of children
+    y(): string | string[] {
+        if (!this.head) { return []; }
+        
+        const currentNode = this.nodes.get(this.head)!;
+        if (currentNode.children.length === 1) {
+            this.head = currentNode.children[0];
+            return this.head;
+        }
+        return currentNode.children;
+    }
+
+    // Get current head
+    getHead(): string | null {
+        return this.head;
+    }
+
+    // Set head to specific hash
+    setHead(hash: string): boolean {
+        if (this.nodes.has(hash)) {
+            this.head = hash;
+            return true;
+        }
+        return false;
+    }
+
+    // Get content at head or specific hash
+    getContent(hash?: string): string {
+        const targetHash = hash || this.head;
+        if (!targetHash || !this.nodes.has(targetHash)) {
+            return this.rootContent;
+        }
+        return this.reconstructContent(targetHash);
+    }
+    
+    // Get all nodes for visualization
+    getAllNodes(): Map<string, TreeNode> {
+        return new Map(this.nodes);
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "ctrlztree" is now active!');
-	context.globalState.update('ctrlztree_full', {}); //todo make it persistent
-	context.globalState.update('ctrlztree_heads', {}); //todo make it persistent
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('ctrlztree.showtree', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Shall open the tree view of the current file\'s history since last git commit (or since the last save if not committed yet)');
-	});
+    console.log('CtrlZTree extension is now active');
 
-	let ctrlz = vscode.commands.registerCommand('ctrlztree.branchbackward', () => {
-		vscode.window.showInformationMessage('Move Backward in CtrlZTree (Ctrl+Z)');
-		if(vscode.window.activeTextEditor === undefined) {
-			vscode.commands.executeCommand('undo');
-			return;
-		}
-		let ctrlztree_full = (context.globalState.get('ctrlztree_full') as {[uri: string]: CtrlZTree});
-		const path = vscode.window.activeTextEditor.document.uri.path;
-		const old_head = vscode.window.activeTextEditor.document.getText();
-		const old_hash = sha256.create();
-		old_hash.update(old_head);
-		const old_hash_hex = old_hash.hex();
-		vscode.commands.executeCommand('undo');
-		const new_head = vscode.window.activeTextEditor.document.getText();
-		const new_hash = sha256.create();
-		new_hash.update(new_head);
-		const new_hash_hex = new_hash.hex();
-		console.log('old head', old_head);
-		console.log('new head', new_head);
-		const diff = diff_object(new_head, old_head); // => we did an undo, so we need to reverse the diff and the diff is added to the diff stack
-		if(path in ctrlztree_full) {
-			const new_head_node = new CtrlZTree(new_hash_hex, diff, undefined, [ctrlztree_full[path]]);
-			ctrlztree_full[path].parent = new_head_node;
-			ctrlztree_full[path] = new_head_node;
-		}else{
-			ctrlztree_full[path] = new CtrlZTree(new_hash_hex, diff);
-		}
-		context.globalState.update('ctrlztree_full', ctrlztree_full);
-	});
+    const historyTrees: Map<string, CtrlZTree> = new Map();
+    let isApplyingEdit = false; // Flag to prevent recording our own edits
+    
+    // Create tree for document if it doesn't exist
+    function getOrCreateTree(document: vscode.TextDocument): CtrlZTree {
+        const key = document.uri.toString();
+        if (!historyTrees.has(key)) {
+            const tree = new CtrlZTree(document.getText());
+            historyTrees.set(key, tree);
+        }
+        return historyTrees.get(key)!;
+    }
 
-	let ctrly = vscode.commands.registerCommand('ctrlztree.branchforward', () => {
-		vscode.window.showInformationMessage('Move Forward in CtrlZTree (Ctrl+Y or Ctrl+Shift+Z)');
-		if(vscode.window.activeTextEditor === undefined) {
-			vscode.commands.executeCommand('redo'); // => so don't do this command, instead do the opposite of undo, by applying the next head in the current branch
-			return;
-		}
-		let ctrlztree_full = (context.globalState.get('ctrlztree_full') as {[uri: string]: CtrlZTree});
-		const path = vscode.window.activeTextEditor.document.uri.path;
-		if(!(path in ctrlztree_full)) {
-			vscode.window.showInformationMessage('No modifications registered in CtrlZTree for this file');
-			return;
-		}else if(ctrlztree_full[path].children.length === 0) {
-			vscode.window.showInformationMessage('No more branch forward');
-			return;
-		}
-		//todo branch forward (redo) => apply the diff of the next node in the tree; if multiple childs, ask which one to apply/notify
-
-		const new_head = ctrlztree_full[path].diff.apply(vscode.window.activeTextEditor.document.getText());
-		vscode.window.activeTextEditor.edit(editBuilder => {
-			editBuilder.replace(new vscode.Range(0, 0, vscode.window.activeTextEditor?.document.lineCount || 0, 0), new_head);
-		});
-	});
-
-	//todo add a new branch, with a new head, and a new node in the tree, thus creating a diff between the new head and the old head
-	let newbranch = vscode.commands.registerCommand('ctrlztree.newbranch', () => {
-		vscode.window.showInformationMessage('Create new branch');
-		const editor = vscode.window.activeTextEditor;
-		if(editor === undefined) {
-			return;
-		}
-		const path = editor.document.uri.path;
-		const head = editor.document.getText();
-		const hash = sha256.create();
-		hash.update(head);
-		const hash_hex = hash.hex();
-		
-	});
-
-	let debugbranch = vscode.commands.registerCommand('ctrlztree.debugbranch', () => {
-		vscode.window.showInformationMessage('Debug branch');
-		console.log('debug branch');
-		let ctrlztree_full = (context.globalState.get('ctrlztree_full') as {[uri: string]: CtrlZTree});
-		let ctrlztree_heads = (context.globalState.get('ctrlztree_full') as {[uri: string]: string});
-		console.log('full tree', JSON.stringify(ctrlztree_full));
-		console.log('heads', JSON.stringify(ctrlztree_heads));
-		const editor = vscode.window.activeTextEditor;
-		if(editor === undefined) {
-			return;
-		}
-		const path = editor.document.uri.path;
-		const head = editor.document.getText();
-		const hash = sha256.create();
-		hash.update(head);
-		const hash_hex = hash.hex();
-		const tree = ctrlztree_full[path];
-		console.log(tree);
-	});
-
-	// todo improve, instead of making a diff each time the file is changed, make the diff only when important change is made (to think, but related to when a ctrlz o ctrl y is made then a modification is made)
-	// todo ^...like save last state before ctrlz, then move on the tree with ctrlz and ctrly
-	const stop_chars = [' ', '\n', '\t', '\r'];
-	vscode.workspace.onDidChangeTextDocument(function(e) {
-		if(vscode.window.activeTextEditor === undefined) {
-			return;
-		}
-		if(e.contentChanges.length === 1){
-			const change = e.contentChanges[0];
-			if(change.text.length === 1 || !stop_chars.includes(change.text)) {
-				console.log('simple change', change);
-			}else{
-				let ctrlztree_full = (context.globalState.get('ctrlztree_full') as {[uri: string]: CtrlZTree});
-				let ctrlztree_heads = (context.globalState.get('ctrlztree_heads') as {[uri: string]: string});
-				const path = vscode.window.activeTextEditor.document.uri.path;
-				if(!(path in ctrlztree_heads)) {
-					ctrlztree_heads[path] = '';
-				}
-				let old_head = ctrlztree_heads[path];
-				let current_text = vscode.window.activeTextEditor.document.getText();
-				const diff = diff_object(old_head, current_text);
-				console.log('diff', diff);
-				//const old_hash_hex = sha256.create().update(old_head).hex();
-				const new_hash_hex = sha256.create().update(current_text).hex();
-				if(path in ctrlztree_full) {
-					const new_head_node = new CtrlZTree(new_hash_hex, diff, undefined, [ctrlztree_full[path]]);
-					ctrlztree_full[path].parent = new_head_node;
-					ctrlztree_full[path] = new_head_node;
-				}else{
-					ctrlztree_full[path] = new CtrlZTree(new_hash_hex, diff);
-				}
-				ctrlztree_heads[path] = current_text;
-				context.globalState.update('ctrlztree_full', ctrlztree_full);
-				context.globalState.update('ctrlztree_heads', ctrlztree_heads);
-			}
-		}
-        console.log('changed.', e);
-        console.log(e.document.isDirty);
+    // Listen to document changes
+    const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(event => {
+        if (isApplyingEdit) { return; } // Skip if we're applying an edit ourselves
+        
+        if (event.document.uri.scheme === 'file') {
+            const tree = getOrCreateTree(event.document);
+            tree.set(event.document.getText());
+        }
+    });
+    
+    // Register commands
+    const undoCommand = vscode.commands.registerCommand('ctrlztree.undo', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) { return; }
+        
+        const document = editor.document;
+        const tree = getOrCreateTree(document);
+        
+        const newHead = tree.z();
+        
+        if (newHead) {
+            isApplyingEdit = true;
+            try {
+                const content = tree.getContent();
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(
+                    document.uri,
+                    new vscode.Range(0, 0, document.lineCount, 0),
+                    content
+                );
+                await vscode.workspace.applyEdit(edit);
+            } finally {
+                isApplyingEdit = false;
+            }
+        } else {
+            vscode.window.showInformationMessage('No more undo history');
+        }
     });
 
-	context.subscriptions.push(disposable, ctrlz, ctrly, newbranch, debugbranch);
+    const redoCommand = vscode.commands.registerCommand('ctrlztree.redo', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) { return; }
+        
+        const document = editor.document;
+        const tree = getOrCreateTree(document);
+        
+        const result = tree.y();
+        
+        if (typeof result === 'string') {
+            // Single child, can directly move to it
+            isApplyingEdit = true;
+            try {
+                const content = tree.getContent();
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(
+                    document.uri,
+                    new vscode.Range(0, 0, document.lineCount, 0),
+                    content
+                );
+                await vscode.workspace.applyEdit(edit);
+            } finally {
+                isApplyingEdit = false;
+            }
+        } else if (result.length > 0) {
+            // Multiple children, let user pick
+            const items = result.map(hash => {
+                const content = tree.getContent(hash);
+                // Creating a preview of the content for the quick pick
+                const preview = content.substring(0, 50).replace(/\n/g, '⏎') + (content.length > 50 ? '...' : '');
+                return {
+                    label: `Branch ${hash.substring(0, 8)}`,
+                    description: preview,
+                    hash
+                };
+            });
+            
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select branch to restore'
+            });
+            
+            if (selected) {
+                tree.setHead(selected.hash);
+                isApplyingEdit = true;
+                try {
+                    const content = tree.getContent();
+                    const edit = new vscode.WorkspaceEdit();
+                    edit.replace(
+                        document.uri,
+                        new vscode.Range(0, 0, document.lineCount, 0),
+                        content
+                    );
+                    await vscode.workspace.applyEdit(edit);
+                } finally {
+                    isApplyingEdit = false;
+                }
+            }
+        } else {
+            vscode.window.showInformationMessage('No more redo history');
+        }
+    });
+
+    // Register command to visualize the history tree
+    const visualizeCommand = vscode.commands.registerCommand('ctrlztree.visualize', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showInformationMessage('No active editor');
+            return;
+        }
+        
+        const document = editor.document;
+        const tree = getOrCreateTree(document);
+        
+        // Create a temporary HTML file to visualize the tree
+        const panel = vscode.window.createWebviewPanel(
+            'ctrlzTreeVisualization',
+            'CtrlZTree Visualization',
+            vscode.ViewColumn.Beside,
+            { enableScripts: true }
+        );
+        
+        // Convert the tree to a format suitable for visualization
+        const nodes = tree.getAllNodes();
+        const nodesArray: any[] = [];
+        const edgesArray: any[] = [];
+        
+        nodes.forEach((node, hash) => {
+            nodesArray.push({
+                id: hash.substring(0, 8),
+                label: hash.substring(0, 8),
+                color: hash === tree.getHead() ? '#ff0000' : '#3333ff',
+            });
+            
+            if (node.parent) {
+                edgesArray.push({
+                    from: node.parent.substring(0, 8),
+                    to: hash.substring(0, 8),
+                });
+            }
+        });
+        
+        // Create HTML for visualization using vis.js
+        panel.webview.html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>CtrlZTree Visualization</title>
+            <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+            <style>
+                #tree-visualization {
+                    width: 100%;
+                    height: 600px;
+                    border: 1px solid lightgray;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="tree-visualization"></div>
+            <script>
+                const nodes = ${JSON.stringify(nodesArray)};
+                const edges = ${JSON.stringify(edgesArray)};
+                
+                // Create a network
+                const container = document.getElementById('tree-visualization');
+                const data = {
+                    nodes: new vis.DataSet(nodes),
+                    edges: new vis.DataSet(edges)
+                };
+                const options = {
+                    layout: {
+                        hierarchical: {
+                            direction: 'UD',
+                            sortMethod: 'directed',
+                            levelSeparation: 150,
+                            nodeSpacing: 100
+                        }
+                    }
+                };
+                const network = new vis.Network(container, data, options);
+            </script>
+        </body>
+        </html>
+        `;
+    });
+    
+    context.subscriptions.push(
+        changeDocumentSubscription,
+        undoCommand,
+        redoCommand,
+        visualizeCommand
+    );
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}

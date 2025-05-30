@@ -1,54 +1,41 @@
 {
   "name": "ctrlztree",
   "displayName": "CtrlZTree",
-  "description": "Keep an history of your changes like git but for undo (ctrl-z), without commit to your git repo.",
-  "version": "0.0.1",
+  "description": "History of modifications in the form of a tree instead of a stack",
+  "version": "0.1.0",
   "engines": {
-    "vscode": "^1.83.0"
+    "vscode": "^1.60.0"
   },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "ctrlztree.showtree",
-        "title": "Show CtrlZTree"
+        "command": "ctrlztree.undo",
+        "title": "CtrlZTree: Undo"
       },
       {
-        "command": "ctrlztree.branchforward",
-        "title": "Move Forward in CtrlZTree (Ctrl+Y or Ctrl+Shift+Z)"
+        "command": "ctrlztree.redo",
+        "title": "CtrlZTree: Redo"
       },
       {
-        "command": "ctrlztree.branchbackward",
-        "title": "Move Backward in CtrlZTree (Ctrl+Z)"
-      },
-      {
-        "command": "ctrlztree.newbranch",
-        "title": "You create a new branch in CtrlZTree (Modified file after a Ctrl+Z)"
-      },
-      {
-        "command": "ctrlztree.debugbranch",
-        "title": "Debug a branch in CtrlZTree"
+        "command": "ctrlztree.visualize",
+        "title": "CtrlZTree: Visualize History Tree"
       }
     ],
     "keybindings": [
       {
-        "command": "ctrlztree.branchbackward",
-        "key": "ctrl+z",
-        "mac": "cmd+z"
+        "command": "ctrlztree.undo",
+        "key": "ctrl+alt+z",
+        "mac": "cmd+alt+z",
+        "when": "editorTextFocus"
       },
       {
-        "command": "ctrlztree.branchforward",
-        "key": "ctrl+y",
-        "mac": "cmd+y"
-      },
-      {
-        "command": "ctrlztree.branchforward",
-        "key": "ctrl+shift+z",
-        "mac": "cmd+shift+z"
+        "command": "ctrlztree.redo",
+        "key": "ctrl+alt+y",
+        "mac": "cmd+alt+y",
+        "when": "editorTextFocus"
       }
     ]
   },
@@ -61,18 +48,14 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.2",
-    "@types/node": "18.x",
-    "@types/vscode": "^1.83.0",
-    "@typescript-eslint/eslint-plugin": "^6.7.3",
-    "@typescript-eslint/parser": "^6.7.3",
-    "@vscode/test-electron": "^2.3.4",
-    "eslint": "^8.50.0",
-    "glob": "^10.3.3",
-    "mocha": "^10.2.0",
-    "typescript": "^5.2.2"
-  },
-  "dependencies": {
-    "js-sha256": "^0.10.1"
+    "@types/vscode": "^1.60.0",
+    "@types/glob": "^7.1.3",
+    "@types/mocha": "^8.2.2",
+    "@types/node": "14.x",
+    "eslint": "^7.27.0",
+    "glob": "^7.1.7",
+    "mocha": "^8.4.0",
+    "typescript": "^4.3.2",
+    "vscode-test": "^1.5.2"
   }
 }
