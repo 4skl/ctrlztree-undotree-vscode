@@ -4,6 +4,26 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.1.9] - 2025-05-31
+
+### Enhanced
+- **Git-Style Diff Display**: Replaced character-level diff previews with readable git-style text diffs
+- Enhanced tooltip previews now show line-based changes with `+` (added) and `-` (removed) indicators
+- Branch selection dialog displays meaningful diff summaries instead of raw content previews
+- Improved readability when viewing change history in the tree visualization
+
+### Added
+- New `generateUnifiedDiff()` function for full git-style unified diff output
+- New `generateDiffSummary()` function for concise diff summaries suitable for tooltips
+- New `generateLineDiff()` function for line-based diff operations
+- Helper functions `groupIntoHunks()` for organizing diff changes into readable sections
+
+### Technical Details
+- Enhanced `lcs.ts` with 6 new git-style diff generation functions
+- Updated `extension.ts` to use `generateDiffSummary()` instead of character-based previews
+- Improved tooltip format to display changes in git-like format with line context
+- Better user experience when selecting branches or viewing change previews
+
 ## [0.1.8] - 2025-05-31
 
 ### Fixed

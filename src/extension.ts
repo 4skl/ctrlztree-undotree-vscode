@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { generateDiff, applyDiff, serializeDiff, deserializeDiff, generateDiffSummary, generateUnifiedDiff } from './lcs';
+import { generateDiff, applyDiff, serializeDiff, deserializeDiff, generateDiffSummary } from './lcs';
 
 interface TreeNode {
     hash: string;
@@ -790,11 +790,14 @@ export function activate(context: vscode.ExtensionContext) {
             } else if (result.length > 0) { // Ambiguous redo, result is an array of possible next states (hashes)
                 outputChannel.appendLine(`CtrlZTree: Ambiguous redo. Options: ${result.join(', ')}`);
                 const items = result.map(hash => {
-                    const nodeContent = tree.getContent(hash); // Get content for specific hash
-                    const preview = nodeContent.substring(0, 50).replace(/\\n/g, '⏎') + (nodeContent.length > 50 ? '...' : '');
+                    // Get git-style diff preview for branch selection
+                    const currentContent = tree.getContent(); // Current state
+                    const branchContent = tree.getContent(hash); // Target branch state
+                    const diffPreview = generateDiffSummary(currentContent, branchContent);
+                    
                     return {
                         label: `Branch ${hash.substring(0, 8)}`,
-                        description: preview,
+                        description: diffPreview.replace(/\n/g, ' | '), // Format for single-line description
                         hash
                     };
                 });
