@@ -487,20 +487,81 @@ export function activate(context: vscode.ExtensionContext) {
                 async message => {
                     switch (message.command) {
                         case 'navigateToNode':
-                            const activeEditor = vscode.window.activeTextEditor;
-                            if (!activeEditor || activeEditor.document.uri.toString() !== docUriString) {
-                                vscode.window.showErrorMessage('CtrlZTree: Target document for navigation is not active or has changed.');
-                                outputChannel.appendLine(`CtrlZTree: Navigation failed. Target ${docUriString}, Active: ${activeEditor?.document.uri.toString()}`);
+                            let targetEditor = vscode.window.activeTextEditor;
+                            
+                            // Robust document targeting with multiple fallback strategies
+                            if (!targetEditor || targetEditor.document.uri.toString() !== docUriString) {
+                                outputChannel.appendLine(`CtrlZTree: Target document ${docUriString} is not active. Current: ${targetEditor?.document.uri.toString() || 'none'}`);
+                                
+                                // Strategy 1: Find document in already open editors
+                                let targetDocument = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString);
+                                
+                                if (targetDocument) {
+                                    try {
+                                        const newEditor = await vscode.window.showTextDocument(targetDocument, vscode.ViewColumn.Active);
+                                        targetEditor = newEditor;
+                                        outputChannel.appendLine(`CtrlZTree: Successfully switched to target document ${docUriString}`);
+                                    } catch (e: any) {
+                                        outputChannel.appendLine(`CtrlZTree: Error switching documents: ${e.message}`);
+                                        vscode.window.showErrorMessage(`CtrlZTree: Could not switch to target document: ${e.message}`);
+                                        return;
+                                    }
+                                } else {
+                                    // Strategy 2: Try to open the document from URI
+                                    try {
+                                        const uri = vscode.Uri.parse(docUriString);
+                                        const newEditor = await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.Active });
+                                        targetEditor = newEditor;
+                                        outputChannel.appendLine(`CtrlZTree: Successfully opened target document from URI ${docUriString}`);
+                                    } catch (e: any) {
+                                        outputChannel.appendLine(`CtrlZTree: Could not open document from URI: ${e.message}`);
+                                        vscode.window.showErrorMessage('CtrlZTree: Target document is not available. Please open the file first.');
+                                        return;
+                                    }
+                                }
+                            }
+                            
+                            // Final validation
+                            if (!targetEditor || targetEditor.document.uri.toString() !== docUriString) {
+                                const errorMsg = `Could not activate target document for navigation. Expected: ${docUriString}, Got: ${targetEditor?.document.uri.toString() || 'none'}`;
+                                outputChannel.appendLine(`CtrlZTree: ${errorMsg}`);
+                                vscode.window.showErrorMessage(`CtrlZTree: ${errorMsg}`);
                                 return;
                             }
+                            
                             const currentPanelHashMap = panelToFullHashMap.get(panel);
                             if (!currentPanelHashMap) {
                                 vscode.window.showErrorMessage('CtrlZTree: Internal error - hash map not found for this panel.');
+                                outputChannel.appendLine('CtrlZTree: Hash map not found, attempting to recreate tree state...');
+                                // Try to recreate the tree and hash map
+                                const recreatedTree = getOrCreateTree(targetEditor.document);
+                                if (recreatedTree) {
+                                    postUpdatesToWebview(panel, recreatedTree, docUriString);
+                                    vscode.window.showInformationMessage('CtrlZTree: Tree state restored. Please try navigation again.');
+                                }
                                 return;
                             }
                             const shortHash = message.shortHash;
                             const fullHash = currentPanelHashMap.get(shortHash);
                             const targetTree = historyTrees.get(docUriString);
+                            
+                            // Additional validation: ensure tree and hash are consistent
+                            if (!targetTree) {
+                                outputChannel.appendLine(`CtrlZTree: Tree not found for ${docUriString}, recreating...`);
+                                const recreatedTree = getOrCreateTree(targetEditor.document);
+                                postUpdatesToWebview(panel, recreatedTree, docUriString);
+                                vscode.window.showInformationMessage('CtrlZTree: Tree recreated. Please try navigation again.');
+                                return;
+                            }
+                            
+                            if (!fullHash) {
+                                outputChannel.appendLine(`CtrlZTree: Hash ${shortHash} not found in current panel map. Available hashes: ${Array.from(currentPanelHashMap.keys()).join(', ')}`);
+                                vscode.window.showWarningMessage(`CtrlZTree: Node ${shortHash} not found. The tree may have been updated.`);
+                                // Refresh the tree view
+                                postUpdatesToWebview(panel, targetTree, docUriString);
+                                return;
+                            }
+                            
                             if (fullHash && targetTree) {
                                 const success = targetTree.setHead(fullHash);
                                 if (success) {
@@ -508,12 +569,25 @@ export function activate(context: vscode.ExtensionContext) {
                                     try {
                                         const content = targetTree.getContent();
                                         const edit = new vscode.WorkspaceEdit();
+                                        
+                                        // Ensure we have the correct document reference
+                                        const activeDoc = targetEditor.document;
+                                        if (activeDoc.uri.toString() !== docUriString) {
+                                            throw new Error(`Document URI mismatch: expected ${docUriString}, got ${activeDoc.uri.toString()}`);
+                                        }
+                                        
                                         edit.replace(
-                                            activeEditor.document.uri,
-                                            new vscode.Range(0, 0, activeEditor.document.lineCount, 0),
+                                            activeDoc.uri,
+                                            new vscode.Range(0, 0, activeDoc.lineCount, 0),
                                             content
                                         );
-                                        await vscode.workspace.applyEdit(edit);
+                                        
+                                        const applyResult = await vscode.workspace.applyEdit(edit);
+                                        if (!applyResult) {
+                                            throw new Error('WorkspaceEdit was not applied successfully');
+                                        }
+                                        
+                                        outputChannel.appendLine(`CtrlZTree: Successfully navigated to node ${shortHash} (${fullHash.substring(0, 16)}...)`);
                                     } catch (e: any) {
                                         outputChannel.appendLine(`CtrlZTree: Error applying edit from webview: ${e.message} Stack: ${e.stack}`);
                                         vscode.window.showErrorMessage(`CtrlZTree navigation error: ${e.message}`);
