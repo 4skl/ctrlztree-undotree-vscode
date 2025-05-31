@@ -20,6 +20,8 @@ This project is based on the original [CtrlZTree](https://github.com/4skl/CtrlZT
 - **Real-time Updates**: Tree view updates automatically as you edit
 - **File-specific Trees**: Each open file maintains its own history tree
 - **Visual Indicators**: Current position highlighted in red, other states in blue
+- **Enhanced Tooltips**: Hover over nodes to see concise diff previews showing only changed lines
+- **Smart Content Display**: Tooltips show git-style diffs with intelligent truncation for large changes
 
 ## 🚀 How It Works
 
@@ -56,7 +58,14 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 2. A new panel opens showing your edit history as an interactive graph
 3. **Current state** is highlighted in red, **other states** in blue
 4. **Click any node** to instantly navigate to that document state
-5. **Panel title** shows "CtrlZTree \<filename\>" for easy identification
+5. **Hover over nodes** to see enhanced tooltips with concise change previews
+6. **Panel title** shows "CtrlZTree \<filename\>" for easy identification
+
+### Enhanced Tooltips (v0.2.0)
+- **Git-style Diffs**: Tooltips show only the actual changed lines (+ and - lines)
+- **Clean Display**: No redundant headers or duplicate text - just the essential changes
+- **Smart Truncation**: Large diffs are limited to 15 lines with a "more changes" indicator
+- **Better Readability**: Improved formatting for quick understanding of what changed
 
 ## 💡 Example Workflow
 
@@ -102,7 +111,23 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.1.0 (Current)
+### 0.2.1 (Current)
+
+**Maintenance Release:**
+- ✅ **Code Cleanup**: Removed unused `lcs_new.ts` file for cleaner project structure
+- ✅ **Project Organization**: Eliminated redundant files not being used by the extension
+- No functional changes - purely maintenance and cleanup
+
+### 0.2.0
+
+**Enhanced Tooltip Functionality:**
+- ✅ **Improved Diff Display**: Tooltips now show only the changed lines (+ and - lines) from git-style diffs
+- ✅ **Cleaner Interface**: Removed duplicate "Changes:" headers and redundant text
+- ✅ **Smart Truncation**: Large diffs are intelligently limited to 15 lines with "more changes" indicator
+- ✅ **Better Root Node Handling**: Initial content preview instead of generic "Root change" message
+- ✅ **Enhanced Readability**: Concise, focused information about code changes in tooltips
+
+### 0.1.0-0.1.9
 
 **Initial Release Features:**
 - ✅ Real-time history tree construction

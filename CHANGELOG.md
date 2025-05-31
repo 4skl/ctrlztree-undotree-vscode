@@ -4,6 +4,13 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.1] - 2025-05-31
+
+### Maintenance
+- **Code Cleanup**: Removed unused `lcs_new.ts` file that was not being imported or used
+- Cleaned up project structure by removing redundant files
+- No functional changes - purely maintenance release
+
 ## [0.2.0] - 2025-05-31
 
 ### Enhanced
