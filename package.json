@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "publisher": "4skl",
   "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/4skl/CtrlZTree.git"
+  },
   "engines": {
     "vscode": "^1.60.0"
   },
