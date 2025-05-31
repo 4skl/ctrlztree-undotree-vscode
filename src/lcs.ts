@@ -34,11 +34,11 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
             // Characters in input1 that need to be removed
             let removeStart = i;
             let removeLength = 0;
-            
-            // Look ahead to find next matching point or end
+              // Look ahead to find next matching point or end
             let nextMatchI = input1.length;
             let nextMatchJ = j;
-              for (let ti = i + 1; ti < input1.length; ti++) {
+            
+            for (let ti = i + 1; ti < input1.length; ti++) {
                 for (let tj = j; tj < input2.length; tj++) {
                     if (input1[ti] === input2[tj]) {
                         nextMatchI = ti;
@@ -65,11 +65,11 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
             // Characters in input2 that need to be added
             let addStart = j;
             let addContent = '';
-            
-            // Look ahead to find next matching point or end
+              // Look ahead to find next matching point or end
             let nextMatchI = i;
             let nextMatchJ = input2.length;
-              for (let tj = j + 1; tj < input2.length; tj++) {
+            
+            for (let tj = j + 1; tj < input2.length; tj++) {
                 for (let ti = i; ti < input1.length; ti++) {
                     if (input2[tj] === input1[ti]) {
                         nextMatchI = ti;

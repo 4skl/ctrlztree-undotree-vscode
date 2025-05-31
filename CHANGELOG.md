@@ -4,6 +4,32 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.1.8] - 2025-05-31
+
+### Fixed
+- **Documentation Fix**: Corrected corrupted CHANGELOG.md file
+- Properly documented all previous versions including the critical v0.1.7 LCS bug fix
+- Restored proper changelog formatting and structure
+
+### Technical Details
+- Fixed duplicate content and missing entries in CHANGELOG.md
+- Ensured all version history is properly documented
+- Maintained proper markdown formatting for better readability
+
+## [0.1.7] - 2025-05-31
+
+### Fixed
+- **Critical Bug Fix**: Replaced buggy LCS implementation with working version
+- Fixed "Maximum call stack size exceeded" error caused by reconstruction bugs in diff algorithm
+- Improved diff reconstruction reliability and performance
+- Fixed TypeScript compilation errors with proper brace formatting
+
+### Technical Details
+- Replaced current `src/lcs.ts` with previously working `lcs_new.ts` implementation
+- Fixed conditional statements to use proper braces for TypeScript compliance
+- Removed backup files and cleaned up temporary implementations
+- The diff algorithm now correctly reconstructs content without infinite loops
+
 ## [0.1.6] - 2025-05-31
 
 ### Changed
@@ -25,9 +51,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Technical Details
 - Removed duplicate and legacy LCS files to reduce package size
 - Kept only `src/lcs.ts` and `out/lcs.js` which contain the active implementation
-- Cleaner codebase with no unused files notable changes to the "ctrlztree" extension will be documented in this file.
-
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+- Cleaner codebase with no unused files
 
 ## [0.1.5] - 2025-01-31
 
