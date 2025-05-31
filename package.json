@@ -3,6 +3,7 @@
   "displayName": "CtrlZTree",
   "description": "History of modifications in the form of a tree instead of a stack",
   "version": "0.1.0",
+  "publisher": "4skl",
   "engines": {
     "vscode": "^1.60.0"
   },
@@ -27,14 +28,14 @@
     "keybindings": [
       {
         "command": "ctrlztree.undo",
-        "key": "ctrl+alt+z",
-        "mac": "cmd+alt+z",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
         "when": "editorTextFocus"
       },
       {
         "command": "ctrlztree.redo",
-        "key": "ctrl+alt+y",
-        "mac": "cmd+alt+y",
+        "key": "ctrl+y",
+        "mac": "cmd+y",
         "when": "editorTextFocus"
       }
     ]
