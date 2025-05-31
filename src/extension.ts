@@ -168,8 +168,42 @@ export function activate(context: vscode.ExtensionContext) {
         const activeVisualizationPanels = new Map<string, vscode.WebviewPanel>();
         const panelToFullHashMap = new Map<vscode.WebviewPanel, Map<string, string>>();
         let isApplyingEdit = false; 
+        const processingDocuments = new Set<string>(); // Track documents currently being processed 
 
         outputChannel.appendLine('CtrlZTree: Initializing data structures.');
+
+        // Helper function to extract meaningful changes from diff operations
+        function getDiffPreview(node: TreeNode): string {
+            if (!node.diff) {
+                return "Initial state";
+            }
+            
+            try {
+                const diffOps = deserializeDiff(node.diff);
+                const changes: string[] = [];
+                
+                for (const op of diffOps) {
+                    if (op.type === 'add' && op.content) {
+                        // Show added content
+                        const addContent = op.content.length > 50 
+                            ? op.content.substring(0, 50).replace(/\n/g, '⏎') + '...'
+                            : op.content.replace(/\n/g, '⏎');
+                        changes.push(`+${addContent}`);
+                    } else if (op.type === 'remove' && op.length && op.length > 0) {
+                        // Show that content was removed (we don't store the removed content in our optimized format)
+                        changes.push(`-${op.length} chars`);
+                    }
+                }
+                
+                if (changes.length === 0) {
+                    return "No changes";
+                }
+                
+                return changes.join(', ');
+            } catch (error) {
+                return `Parse error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            }
+        }
 
         // Function to send updated tree data to the webview
         function postUpdatesToWebview(panel: vscode.WebviewPanel, tree: CtrlZTree, documentUriString: string) {
@@ -188,16 +222,13 @@ export function activate(context: vscode.ExtensionContext) {
                 const shortHash = fullHash.substring(0, 8);
                 currentFullHashMap.set(shortHash, fullHash);
                 
-                // Get content at this node for tooltip
-                const nodeContent = tree.getContent(fullHash);
-                const contentPreview = nodeContent.length > 100 
-                    ? nodeContent.substring(0, 100).replace(/\n/g, '⏎') + '...'
-                    : nodeContent.replace(/\n/g, '⏎');
+                // Get only the modified part for tooltip
+                const diffPreview = getDiffPreview(node);
                 
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: shortHash,
-                    title: `Hash: ${shortHash}\nContent: ${contentPreview}`
+                    title: `Hash: ${shortHash}\nChanges: ${diffPreview}`
                 });
                 if (node.parent) {
                     edgesArrayForVis.push({
@@ -458,16 +489,13 @@ export function activate(context: vscode.ExtensionContext) {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
                 
-                // Get content at this node for tooltip
-                const nodeContent = tree.getContent(fullHash);
-                const contentPreview = nodeContent.length > 100 
-                    ? nodeContent.substring(0, 100).replace(/\n/g, '⏎') + '...'
-                    : nodeContent.replace(/\n/g, '⏎');
+                // Get only the modified part for tooltip
+                const diffPreview = getDiffPreview(node);
                 
                 nodesArrayForVis.push({
                     id: shortHash, 
                     label: shortHash,
-                    title: `Hash: ${shortHash}\nContent: ${contentPreview}`,
+                    title: `Hash: ${shortHash}\nChanges: ${diffPreview}`,
                 });
                 
                 if (node.parent) {
@@ -646,7 +674,7 @@ export function activate(context: vscode.ExtensionContext) {
             );
         }
 
-        // Fix: Always update the panel's webview on file change, even if the panel is not visible
+        // Process document changes immediately (as intended for keystroke-level undo/redo)
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async event => {
             if (isApplyingEdit) { 
                 outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument - skipping due to isApplyingEdit.');
@@ -654,21 +682,41 @@ export function activate(context: vscode.ExtensionContext) {
             } 
             
             if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') {
+                const docUriString = event.document.uri.toString();
+                
+                // Additional guard: prevent recursive processing of the same document
+                if (processingDocuments.has(docUriString)) {
+                    outputChannel.appendLine(`CtrlZTree: onDidChangeTextDocument - skipping ${docUriString} due to ongoing processing.`);
+                    return;
+                }
+                
                 try {
+                    processingDocuments.add(docUriString);
+                    
                     const tree = getOrCreateTree(event.document);
-                    tree.set(event.document.getText());
-                    outputChannel.appendLine('CtrlZTree: Document changed and processed.');
-                    const docUriString = event.document.uri.toString();
-                    const panel = activeVisualizationPanels.get(docUriString);
-                    if (panel) {
-                        postUpdatesToWebview(panel, tree, docUriString);
-                        outputChannel.appendLine(`CtrlZTree: Panel for ${docUriString} updated after file change.`);
+                    const currentText = event.document.getText();
+                    const currentTreeContent = tree.getContent();
+                    
+                    // Only process if the document content actually differs from tree content
+                    if (currentText !== currentTreeContent) {
+                        tree.set(currentText);
+                        outputChannel.appendLine('CtrlZTree: Document changed and processed.');
+                        
+                        const panel = activeVisualizationPanels.get(docUriString);
+                        if (panel) {
+                            postUpdatesToWebview(panel, tree, docUriString);
+                            outputChannel.appendLine(`CtrlZTree: Panel for ${docUriString} updated after file change.`);
+                        } else {
+                            outputChannel.appendLine(`CtrlZTree: No panel open for ${docUriString} on file change.`);
+                        }
                     } else {
-                        outputChannel.appendLine(`CtrlZTree: No panel open for ${docUriString} on file change.`);
+                        outputChannel.appendLine('CtrlZTree: Document content matches tree content - skipping update.');
                     }
                 } catch (e: any) {
                     outputChannel.appendLine(`CtrlZTree: Error in onDidChangeTextDocument: ${e.message} Stack: ${e.stack}`);
                     vscode.window.showErrorMessage(`CtrlZTree onDidChangeTextDocument error: ${e.message}`);
+                } finally {
+                    processingDocuments.delete(docUriString);
                 }
             }
         });
