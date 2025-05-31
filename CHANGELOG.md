@@ -4,6 +4,12 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.2] - 2025-05-31
+
+### Fixed
+- **Repository URL**: Updated package.json repository URL to point to the correct dedicated repository: `https://github.com/4skl/ctrlztree-undotree-vscode.git`
+- **Project Organization**: Fixed repository reference to use the specific VS Code extension repository instead of the general CtrlZTree project
+
 ## [0.2.1] - 2025-05-31
 
 ### Maintenance

@@ -111,7 +111,14 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.2.1 (Current)
+### 0.2.2 (Current)
+
+**Repository Update:**
+- ✅ **Fixed Repository URL**: Updated package.json to point to the correct dedicated VS Code extension repository
+- ✅ **Project Organization**: Now properly references `https://github.com/4skl/ctrlztree-undotree-vscode.git`
+- No functional changes - purely organizational update
+
+### 0.2.1
 
 **Maintenance Release:**
 - ✅ **Code Cleanup**: Removed unused `lcs_new.ts` file for cleaner project structure
