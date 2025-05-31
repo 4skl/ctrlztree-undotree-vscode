@@ -171,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
         const processingDocuments = new Set<string>(); // Track documents currently being processed 
 
         outputChannel.appendLine('CtrlZTree: Initializing data structures.');
-
+        
         // Helper function to extract meaningful changes from diff operations with git-style display
         function getDiffPreview(node: TreeNode, tree: CtrlZTree): string {
             if (!node.diff) {
@@ -182,14 +182,42 @@ export function activate(context: vscode.ExtensionContext) {
                 // Get the parent content to generate a proper diff
                 const parentHash = node.parent;
                 if (!parentHash) {
-                    return "Root change";
+                    // For root node, show the initial content lines (limited)
+                    const currentContent = tree.getContent(node.hash);
+                    const lines = currentContent.split('\n').slice(0, 10); // Show first 10 lines
+                    const preview = lines.join('\n');
+                    return lines.length < currentContent.split('\n').length 
+                        ? `Initial content:\n${preview}\n... (${currentContent.split('\n').length - lines.length} more lines)`
+                        : `Initial content:\n${preview}`;
                 }
                 
                 const parentContent = tree.getContent(parentHash);
                 const currentContent = tree.getContent(node.hash);
                 
-                // Use the new generateDiffSummary function for better text-based diff display
-                return generateDiffSummary(parentContent, currentContent);
+                // Use generateDiffSummary to get the changed lines only
+                const diffSummary = generateDiffSummary(parentContent, currentContent);
+                
+                // Extract only the actual changed content lines (+ and - lines)
+                const diffLines = diffSummary.split('\n');
+                const changedLines: string[] = [];
+                
+                for (const line of diffLines) {
+                    if (line.startsWith('+') || line.startsWith('-')) {
+                        changedLines.push(line);
+                    }
+                }
+                
+                // Limit the number of changed lines shown in tooltip for readability
+                const maxLines = 15;
+                if (changedLines.length > maxLines) {
+                    const displayedLines = changedLines.slice(0, maxLines);
+                    return `${displayedLines.join('\n')}\n... (${changedLines.length - maxLines} more changes)`;
+                } else if (changedLines.length > 0) {
+                    return changedLines.join('\n');
+                } else {
+                    // Fallback if no +/- lines found, show the summary
+                    return diffSummary;
+                }
             } catch (error) {
                 return `Parse error: ${error instanceof Error ? error.message : 'Unknown error'}`;
             }
@@ -214,11 +242,10 @@ export function activate(context: vscode.ExtensionContext) {
                 
                 // Get git-style diff preview for tooltip
                 const diffPreview = getDiffPreview(node, tree);
-                
-                nodesArrayForVis.push({
+                  nodesArrayForVis.push({
                     id: shortHash,
                     label: shortHash,
-                    title: `Hash: ${shortHash}\nChanges:\n${diffPreview}`
+                    title: `Hash: ${shortHash}\n${diffPreview}`
                 });
                 if (node.parent) {
                     edgesArrayForVis.push({
@@ -481,11 +508,10 @@ export function activate(context: vscode.ExtensionContext) {
                 
                 // Get git-style diff preview for tooltip
                 const diffPreview = getDiffPreview(node, tree);
-                
-                nodesArrayForVis.push({
+                  nodesArrayForVis.push({
                     id: shortHash, 
                     label: shortHash,
-                    title: `Hash: ${shortHash}\nChanges:\n${diffPreview}`,
+                    title: `Hash: ${shortHash}\n${diffPreview}`,
                 });
                 
                 if (node.parent) {

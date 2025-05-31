@@ -4,6 +4,25 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.0] - 2025-05-31
+
+### Enhanced
+- **Enhanced Tooltip Content**: Tooltips now show only the changed lines from diffs instead of full content
+- Improved readability by displaying only the relevant `+` (added) and `-` (removed) lines
+- Limited tooltip display to 15 changed lines maximum to prevent overwhelming UI
+- Better focus on what actually changed at each node in the tree
+
+### Added
+- Smart extraction of changed lines from git-style diffs for tooltip display
+- Automatic truncation with "more changes" indicator for large diffs
+- Enhanced tooltip format showing only the relevant diff content
+
+### Technical Details
+- Modified `getDiffPreview()` function to extract only `+` and `-` lines from diff summaries
+- Added intelligent line limiting (15 lines max) for tooltip readability
+- Improved user experience by focusing on actual changes rather than full content
+- Maintained git-style diff format for consistency
+
 ## [0.1.9] - 2025-05-31
 
 ### Enhanced
