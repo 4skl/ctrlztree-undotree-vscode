@@ -4,6 +4,20 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.1.7] - 2025-05-31
+
+### Fixed
+- **Critical Bug Fix**: Replaced buggy LCS implementation with working version
+- Fixed "Maximum call stack size exceeded" error caused by reconstruction bugs in diff algorithm
+- Improved diff reconstruction reliability and performance
+- Fixed TypeScript compilation errors with proper brace formatting
+
+### Technical Details
+- Replaced current `src/lcs.ts` with previously working `lcs_new.ts` implementation
+- Fixed conditional statements to use proper braces for TypeScript compliance
+- Removed backup files and cleaned up temporary implementations
+- The diff algorithm now correctly reconstructs content without infinite loops
+
 ## [0.1.6] - 2025-05-31
 
 ### Changed
