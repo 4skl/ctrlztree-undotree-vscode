@@ -4,6 +4,31 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.1.6] - 2025-05-31
+
+### Changed
+- **Final Cleanup**: Removed temporary test file `test_diff_efficiency.js`
+- Extension package is now completely clean with only production files
+- Reduced package size further by removing development artifacts
+
+### Technical Details
+- Removed `test_diff_efficiency.js` which was used for testing the diff optimization
+- Package now contains only essential files for the extension functionality
+
+## [0.1.5] - 2025-05-31
+
+### Changed
+- **Code Cleanup**: Removed unused LCS implementation files
+- Cleaned up both source (`src/lcs_new.ts`) and compiled (`out/lcs_old.js`, `out/lcs_new.js`) files
+- Extension now uses only the optimized character-based diff implementation
+
+### Technical Details
+- Removed duplicate and legacy LCS files to reduce package size
+- Kept only `src/lcs.ts` and `out/lcs.js` which contain the active implementation
+- Cleaner codebase with no unused files notable changes to the "ctrlztree" extension will be documented in this file.
+
+Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+
 ## [0.1.5] - 2025-01-31
 
 ### Changed
