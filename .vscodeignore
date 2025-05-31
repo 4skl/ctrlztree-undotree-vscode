@@ -1,3 +1,7 @@
+# Ignore node_modules (most important - saves ~50MB)
+node_modules/
+
+# Ignore development files
 .vscode/**
 .vscode-test/**
 src/**
@@ -8,3 +12,17 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+
+# Ignore test files
+out/test/
+**/test/**
+**/*.test.*
+
+# Ignore build artifacts and logs
+*.log
+npm-debug.log*
+*.vsix
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
