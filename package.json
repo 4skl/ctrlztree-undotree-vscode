@@ -4,6 +4,7 @@
   "description": "History of modifications in the form of a tree instead of a stack",
   "version": "0.1.0",
   "publisher": "4skl",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.60.0"
   },
