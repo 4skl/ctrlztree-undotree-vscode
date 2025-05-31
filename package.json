@@ -2,7 +2,7 @@
   "name": "ctrlztree",
   "displayName": "CtrlZTree",
   "description": "History of modifications in the form of a tree instead of a stack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "4skl",
   "icon": "icon.png",
   "repository": {

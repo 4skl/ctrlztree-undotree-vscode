@@ -187,10 +187,17 @@ export function activate(context: vscode.ExtensionContext) {
             nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
                 currentFullHashMap.set(shortHash, fullHash);
+                
+                // Get content at this node for tooltip
+                const nodeContent = tree.getContent(fullHash);
+                const contentPreview = nodeContent.length > 100 
+                    ? nodeContent.substring(0, 100).replace(/\n/g, '⏎') + '...'
+                    : nodeContent.replace(/\n/g, '⏎');
+                
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: shortHash,
-                    title: `Full Hash: ${fullHash}`
+                    title: `Hash: ${shortHash}\nContent: ${contentPreview}`
                 });
                 if (node.parent) {
                     edgesArrayForVis.push({
@@ -450,10 +457,17 @@ export function activate(context: vscode.ExtensionContext) {
             nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
+                
+                // Get content at this node for tooltip
+                const nodeContent = tree.getContent(fullHash);
+                const contentPreview = nodeContent.length > 100 
+                    ? nodeContent.substring(0, 100).replace(/\n/g, '⏎') + '...'
+                    : nodeContent.replace(/\n/g, '⏎');
+                
                 nodesArrayForVis.push({
                     id: shortHash, 
                     label: shortHash,
-                    title: `Full Hash: ${fullHash}`,
+                    title: `Hash: ${shortHash}\nContent: ${contentPreview}`,
                 });
                 
                 if (node.parent) {
