@@ -163,8 +163,58 @@ export function activate(context: vscode.ExtensionContext) {
 
     try {
         const historyTrees: Map<string, CtrlZTree> = new Map();
-        let isApplyingEdit = false; 
+        const activeVisualizationPanels: Map<string, vscode.WebviewPanel> = new Map();
+        const panelToFullHashMap: Map<vscode.WebviewPanel, Map<string, string>> = new Map();
+        let isApplyingEdit = false;
         console.log('CtrlZTree: Initial variables declared.');
+
+        // Function to send updated tree data to the webview
+        function postUpdatesToWebview(documentUri: vscode.Uri) {
+            const docUriString = documentUri.toString();
+            const panel = activeVisualizationPanels.get(docUriString);
+            const tree = historyTrees.get(docUriString);
+
+            if (panel && panel.visible && tree) {
+                const nodes = tree.getAllNodes();
+                const nodesArrayForVis: any[] = [];
+                const edgesArrayForVis: any[] = [];
+                const currentFullHashMap = new Map<string, string>();
+                const currentHeadFullHash = tree.getHead();
+                let currentHeadShortHash: string | null = null;
+
+                if (currentHeadFullHash) {
+                    currentHeadShortHash = currentHeadFullHash.substring(0, 8);
+                }
+
+                nodes.forEach((node, fullHash) => {
+                    const shortHash = fullHash.substring(0, 8);
+                    currentFullHashMap.set(shortHash, fullHash);
+                    nodesArrayForVis.push({
+                        id: shortHash,
+                        label: shortHash,
+                        title: `Full Hash: ${fullHash}`
+                    });
+                    if (node.parent) {
+                        edgesArrayForVis.push({
+                            from: node.parent.substring(0, 8),
+                            to: shortHash,
+                        });
+                    }
+                });
+
+                panelToFullHashMap.set(panel, currentFullHashMap);
+
+                panel.webview.postMessage({
+                    command: 'updateTree',
+                    nodes: nodesArrayForVis,
+                    edges: edgesArrayForVis,
+                    headShortHash: currentHeadShortHash
+                });
+                console.log(`CtrlZTree: Posted updates to webview for ${docUriString}`);
+            } else {
+                console.log(`CtrlZTree: No active/visible panel or tree for ${docUriString} to post updates.`);
+            }
+        }
         
         function getOrCreateTree(document: vscode.TextDocument): CtrlZTree {
             const key = document.uri.toString();
@@ -177,13 +227,110 @@ export function activate(context: vscode.ExtensionContext) {
         }
         console.log('CtrlZTree: getOrCreateTree function defined.');
 
+        function getWebviewContent(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null): string {
+            return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-UTF-8">
+                <title>CtrlZTree Visualization</title>
+                <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+                <style>
+                    #tree-visualization {
+                        width: 100%;
+                        height: 100vh; /* Full viewport height */
+                        border: 1px solid lightgray;
+                    }
+                </style>
+            </head>
+            <body>
+                <div id="tree-visualization"></div>
+                <script>
+                    const vscode = acquireVsCodeApi(); 
+                    let network = null;
+                    let nodes = new vis.DataSet(${JSON.stringify(initialNodes)});
+                    let edges = new vis.DataSet(${JSON.stringify(initialEdges)});
+                    let currentHeadNodeId = ${currentHeadShortHash ? "'" + currentHeadShortHash + "'" : null};
+
+                    function initializeOrUpdateNetwork(newNodesArray, newEdgesArray, headNodeId) {
+                        if (nodes && edges) {
+                            nodes.clear();
+                            edges.clear();
+                            nodes.add(newNodesArray);
+                            edges.add(newEdgesArray);
+                        } else {
+                            nodes = new vis.DataSet(newNodesArray);
+                            edges = new vis.DataSet(newEdgesArray);
+                        }
+                        currentHeadNodeId = headNodeId;
+
+                        const allNodeIds = nodes.getIds();
+                        const updates = allNodeIds.map(nodeId => ({
+                            id: nodeId,
+                            color: nodeId === currentHeadNodeId ? '#ff0000' : '#3333ff'
+                        }));
+                        if (updates.length > 0) {
+                            nodes.update(updates);
+                        }
+                        
+                        if (!network) {
+                            const container = document.getElementById('tree-visualization');
+                            const data = {
+                                nodes: nodes,
+                                edges: edges
+                            };
+                            const options = {
+                                layout: {
+                                    hierarchical: {
+                                        direction: 'UD',
+                                        sortMethod: 'directed',
+                                        levelSeparation: 100,
+                                        nodeSpacing: 100
+                                    }
+                                },
+                                interaction: { 
+                                    tooltipDelay: 200,
+                                    hover: true 
+                                }
+                            };
+                            network = new vis.Network(container, data, options);
+
+                            network.on("click", function (params) {
+                                if (params.nodes.length > 0) {
+                                    const clickedNodeId = params.nodes[0];
+                                    vscode.postMessage({
+                                        command: 'navigateToNode',
+                                        shortHash: clickedNodeId
+                                    });
+                                }
+                            });
+                        }
+                    }
+
+                    initializeOrUpdateNetwork(${JSON.stringify(initialNodes)}, ${JSON.stringify(initialEdges)}, currentHeadNodeId);
+
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        switch (message.command) {
+                            case 'updateTree':
+                                initializeOrUpdateNetwork(message.nodes, message.edges, message.headShortHash);
+                                break;
+                        }
+                    });
+                </script>
+            </body>
+            </html>
+            `;
+        }
+
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(event => {
             if (isApplyingEdit) { return; } 
             
-            if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') { // Modified condition
+            if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') {
                 try {
                     const tree = getOrCreateTree(event.document);
                     tree.set(event.document.getText());
+                    postUpdatesToWebview(event.document.uri); // Update webview
                     console.log('CtrlZTree: Document changed and processed.');
                 } catch (e: any) {
                     console.error('CtrlZTree: Error in onDidChangeTextDocument:', e.message, e.stack);
@@ -215,6 +362,7 @@ export function activate(context: vscode.ExtensionContext) {
                         content
                     );
                     await vscode.workspace.applyEdit(edit);
+                    postUpdatesToWebview(document.uri); // Update webview
                 } catch (e: any) {
                     console.error('CtrlZTree: Error applying undo edit:', e.message, e.stack);
                     vscode.window.showErrorMessage(`CtrlZTree undo error: ${e.message}`);
@@ -249,6 +397,7 @@ export function activate(context: vscode.ExtensionContext) {
                         content
                     );
                     await vscode.workspace.applyEdit(edit);
+                    postUpdatesToWebview(document.uri); // Update webview
                 } catch (e: any) {
                     console.error('CtrlZTree: Error applying redo edit (single child):', e.message, e.stack);
                     vscode.window.showErrorMessage(`CtrlZTree redo error: ${e.message}`);
@@ -282,6 +431,7 @@ export function activate(context: vscode.ExtensionContext) {
                             content
                         );
                         await vscode.workspace.applyEdit(edit);
+                        postUpdatesToWebview(document.uri); // Update webview
                     } catch (e: any) {
                         console.error('CtrlZTree: Error applying redo edit (branch selection):', e.message, e.stack);
                         vscode.window.showErrorMessage(`CtrlZTree redo error: ${e.message}`);
@@ -305,83 +455,149 @@ export function activate(context: vscode.ExtensionContext) {
             }
             
             const document = editor.document;
+            const docUriString = document.uri.toString();
+
+            if (activeVisualizationPanels.has(docUriString)) {
+                const existingPanel = activeVisualizationPanels.get(docUriString)!;
+                existingPanel.reveal(vscode.ViewColumn.Beside);
+                postUpdatesToWebview(document.uri);
+                console.log(`CtrlZTree: Revealed existing panel for ${docUriString}`);
+                return;
+            }
+            
             const tree = getOrCreateTree(document);
             
             const panel = vscode.window.createWebviewPanel(
                 'ctrlzTreeVisualization',
-                'CtrlZTree Visualization',
+                `CtrlZTree: ${document.fileName.split(/[\\/]/).pop()}`, // Show only filename
                 vscode.ViewColumn.Beside,
-                { enableScripts: true }
+                { 
+                    enableScripts: true,
+                    localResourceRoots: [],
+                    // retainContextWhenHidden: true // Consider if state is lost often
+                }
             );
+            activeVisualizationPanels.set(docUriString, panel);
             
             const nodes = tree.getAllNodes();
-            const nodesArray: any[] = [];
-            const edgesArray: any[] = [];
-            
-            nodes.forEach((node, hash) => {
-                nodesArray.push({
-                    id: hash.substring(0, 8),
-                    label: hash.substring(0, 8),
-                    color: hash === tree.getHead() ? '#ff0000' : '#3333ff',
+            const nodesArrayForVis: any[] = [];
+            const edgesArrayForVis: any[] = [];
+            const initialFullHashMap = new Map<string, string>();
+            const currentHeadFullHash = tree.getHead();
+            let currentHeadShortHash: string | null = null;
+
+            if (currentHeadFullHash) {
+                currentHeadShortHash = currentHeadFullHash.substring(0, 8);
+            }
+
+            nodes.forEach((node, fullHash) => {
+                const shortHash = fullHash.substring(0, 8);
+                initialFullHashMap.set(shortHash, fullHash);
+                nodesArrayForVis.push({
+                    id: shortHash, 
+                    label: shortHash,
+                    title: `Full Hash: ${fullHash}`,
                 });
                 
                 if (node.parent) {
-                    edgesArray.push({
+                    edgesArrayForVis.push({
                         from: node.parent.substring(0, 8),
-                        to: hash.substring(0, 8),
+                        to: shortHash,
                     });
                 }
             });
+            panelToFullHashMap.set(panel, initialFullHashMap);
             
-            panel.webview.html = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>CtrlZTree Visualization</title>
-                <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-                <style>
-                    #tree-visualization {
-                        width: 100%;
-                        height: 600px;
-                        border: 1px solid lightgray;
-                    }
-                </style>
-            </head>
-            <body>
-                <div id="tree-visualization"></div>
-                <script>
-                    const nodes = ${JSON.stringify(nodesArray)};
-                    const edges = ${JSON.stringify(edgesArray)};
-                    
-                    const container = document.getElementById('tree-visualization');
-                    const data = {
-                        nodes: new vis.DataSet(nodes),
-                        edges: new vis.DataSet(edges)
-                    };
-                    const options = {
-                        layout: {
-                            hierarchical: {
-                                direction: 'UD',
-                                sortMethod: 'directed',
-                                levelSeparation: 150,
-                                nodeSpacing: 100
+            panel.webview.html = getWebviewContent(nodesArrayForVis, edgesArrayForVis, currentHeadShortHash);
+            console.log(`CtrlZTree: Created new panel for ${docUriString}`);
+
+            panel.webview.onDidReceiveMessage(
+                async message => {
+                    switch (message.command) {
+                        case 'navigateToNode':
+                            const activeEditorForNavigation = vscode.window.activeTextEditor;
+                            if (!activeEditorForNavigation || activeEditorForNavigation.document.uri.toString() !== docUriString) {
+                                vscode.window.showErrorMessage('CtrlZTree: Target document for navigation is not active or has changed.');
+                                return;
                             }
-                        }
-                    };
-                    const network = new vis.Network(container, data, options);
-                </script>
-            </body>
-            </html>
-            `;
+                            const currentPanelHashMap = panelToFullHashMap.get(panel);
+                            if (!currentPanelHashMap) {
+                                 vscode.window.showErrorMessage('CtrlZTree: Internal error - hash map not found for this panel.');
+                                 return;
+                            }
+
+                            const shortHash = message.shortHash;
+                            const fullHash = currentPanelHashMap.get(shortHash);
+                            const targetTree = historyTrees.get(docUriString);
+
+                            if (fullHash && targetTree) {
+                                const success = targetTree.setHead(fullHash);
+                                if (success) {
+                                    isApplyingEdit = true;
+                                    try {
+                                        const content = targetTree.getContent();
+                                        const edit = new vscode.WorkspaceEdit();
+                                        edit.replace(
+                                            activeEditorForNavigation.document.uri,
+                                            new vscode.Range(0, 0, activeEditorForNavigation.document.lineCount, 0),
+                                            content
+                                        );
+                                        await vscode.workspace.applyEdit(edit);
+                                        postUpdatesToWebview(activeEditorForNavigation.document.uri);
+                                    } catch (e: any) {
+                                        console.error('CtrlZTree: Error applying edit from webview:', e.message, e.stack);
+                                        vscode.window.showErrorMessage(`CtrlZTree navigation error: ${e.message}`);
+                                    } finally {
+                                        isApplyingEdit = false;
+                                    }
+                                } else {
+                                    vscode.window.showWarningMessage(`CtrlZTree: Could not find node for hash ${shortHash}`);
+                                }
+                            } else {
+                                vscode.window.showErrorMessage('CtrlZTree: Could not navigate. Editor or tree not available, or hash not found.');
+                            }
+                            return;
+                    }
+                },
+                undefined,
+                context.subscriptions
+            );
+
+            panel.onDidDispose(
+                () => {
+                    console.log(`CtrlZTree: Panel for ${docUriString} disposed.`);
+                    activeVisualizationPanels.delete(docUriString);
+                    panelToFullHashMap.delete(panel);
+                },
+                null,
+                context.subscriptions
+            );
+
         });
         console.log('CtrlZTree: visualize command registered.');
+
+        const closeDocumentSubscription = vscode.workspace.onDidCloseTextDocument(document => {
+            const docUriString = document.uri.toString();
+            if (activeVisualizationPanels.has(docUriString)) {
+                const panelToDispose = activeVisualizationPanels.get(docUriString)!;
+                panelToDispose.dispose(); // This will trigger its onDidDispose handler for cleanup
+                console.log(`CtrlZTree: Disposed panel for closed document ${docUriString}`);
+            }
+            // Optionally, clean up historyTrees if memory becomes a concern,
+            // but be careful if you want to retain history for reopened files.
+            // if (historyTrees.has(docUriString)) {
+            //     historyTrees.delete(docUriString);
+            //     console.log(`CtrlZTree: Removed tree for closed document ${docUriString}`);
+            // }
+        });
+        console.log('CtrlZTree: onDidCloseTextDocument subscribed.');
         
         context.subscriptions.push(
             changeDocumentSubscription,
             undoCommand,
             redoCommand,
-            visualizeCommand
+            visualizeCommand,
+            closeDocumentSubscription
         );
         console.log('CtrlZTree: All commands registered and subscriptions pushed. Activation successful.');
 
