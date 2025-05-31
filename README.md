@@ -1,76 +1,149 @@
-# CtrlZTree AKA UndoTree, have a better undo history on VSCode
+# CtrlZTree - Visual Undo History for VS Code
 
-This project aim to create an undotree extension kinda like [undotree for Vim](https://github.com/mbbill/undotree).
-This is based on this project [CtrlZTree](https://github.com/4skl/CtrlZTree) that I later noticed existed for Vim but not VSCode.
+CtrlZTree brings tree-based undo/redo functionality to VS Code, inspired by the [undotree for Vim](https://github.com/mbbill/undotree). Unlike traditional linear undo/redo that loses alternative edit paths, CtrlZTree preserves all your editing history in a branching tree structure.
 
-## Features
+This project is based on the original [CtrlZTree](https://github.com/4skl/CtrlZTree) concept, adapted specifically for VS Code.
 
-Project under development, it aims at creating an undotree, show it in a graphical way to find a later version and in the future add the possibility to save it to a file.
-This will avoid loosing informations, and perhaps solve the problem of loosing history when restarting VSCode or closing a window then re-opening it.
+## ✨ Features
 
-# TODO
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### 🌳 Tree-Based History
+- **Branching History**: Never lose edit alternatives when you undo and make new changes
+- **Visual Tree View**: See your entire editing history as an interactive graph
+- **Smart Navigation**: Click any node to instantly jump to that state
 
-For example if there is an image subfolder under your extension project workspace:
+### 🎯 Enhanced Undo/Redo
+- **Custom Undo/Redo**: Replaces VS Code's default Ctrl+Z/Ctrl+Y with tree-aware operations
+- **Branch Selection**: When multiple redo paths exist, choose which branch to follow
+- **Content Preview**: See previews of document states when selecting branches
 
-\!\[feature X\]\(images/feature-x.png\)
+### 📊 Interactive Visualization
+- **Real-time Updates**: Tree view updates automatically as you edit
+- **File-specific Trees**: Each open file maintains its own history tree
+- **Visual Indicators**: Current position highlighted in red, other states in blue
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## 🚀 How It Works
 
-## Requirements
+### Automatic History Tracking
+CtrlZTree automatically tracks every change you make to your files, building a tree structure where:
+- Each **node** represents a unique document state
+- Each **edge** connects a parent state to a child state  
+- **Branches** form when you undo and then make different changes
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### Smart Diff Storage
+Instead of storing complete document copies, CtrlZTree uses intelligent diff algorithms:
+- Only stores the differences between document states
+- Uses SHA-256 hashing to identify identical states
+- Applies diffs efficiently to reconstruct any historical state
 
-## Extension Settings
+### Tree Navigation
+- **Linear Undo/Redo**: When there's only one path, behaves like normal undo/redo
+- **Branch Selection**: When multiple paths exist, shows a picker with content previews
+- **Visual Navigation**: Click any node in the tree view to jump directly to that state
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## 🎮 Usage
 
-For example:
+### Commands
+- **CtrlZTree: Undo** - Navigate to parent node in history tree
+- **CtrlZTree: Redo** - Navigate to child node (with branch selection if multiple paths)
+- **CtrlZTree: Visualize History Tree** - Open interactive tree visualization
 
-This extension contributes the following settings:
+### Default Keybindings
+- `Ctrl+Z` (Windows/Linux) / `Cmd+Z` (Mac) - CtrlZTree Undo
+- `Ctrl+Y` (Windows/Linux) / `Cmd+Y` (Mac) - CtrlZTree Redo
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### Visualization Panel
+1. Run the **"CtrlZTree: Visualize History Tree"** command
+2. A new panel opens showing your edit history as an interactive graph
+3. **Current state** is highlighted in red, **other states** in blue
+4. **Click any node** to instantly navigate to that document state
+5. **Panel title** shows "CtrlZTree \<filename\>" for easy identification
 
-## Known Issues
+## 💡 Example Workflow
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+1. **Start editing** a file - CtrlZTree begins tracking changes
+2. **Make some changes** (A → B → C)
+3. **Undo twice** to return to state A
+4. **Make different changes** (A → D → E)
+5. **Open visualization** to see your branching history:
+   ```
+   A
+   ├── B → C
+   └── D → E (current)
+   ```
+6. **Click node C** to instantly return to that state
+7. **Continue editing** to extend any branch
 
-## Release Notes
+## 🔧 Requirements
 
-Users appreciate release notes as you update your extension.
+- VS Code 1.60.0 or higher
+- No additional dependencies required
 
-### 1.0.0
+## ⚙️ Extension Settings
 
-Initial release of ...
+Currently, CtrlZTree works out of the box with no configuration required. The extension:
+- Automatically activates when VS Code starts
+- Replaces default undo/redo keybindings when editing text
+- Creates separate history trees for each file
 
-### 1.0.1
+## 🐛 Known Issues
 
-Fixed issue #.
+- **History Persistence**: History trees are currently lost when VS Code is restarted or files are closed and reopened
+- **Large Files**: Performance may be impacted on very large files due to diff calculations
+- **Memory Usage**: Long editing sessions may accumulate significant history data
 
-### 1.1.0
+## 📋 Planned Features
 
-Added features X, Y, and Z.
+- [ ] **Persistent History**: Save history trees to disk for persistence across sessions
+- [ ] **History Cleanup**: Automatic pruning of old/unused branches
+- [ ] **Export/Import**: Save and restore specific history states
+- [ ] **Performance Optimization**: Better handling of large files and extensive histories
+- [ ] **Search**: Find specific changes or content in history
+- [ ] **Branch Naming**: Add custom labels to important history points
+
+## 📊 Release Notes
+
+### 0.1.0 (Current)
+
+**Initial Release Features:**
+- ✅ Real-time history tree construction
+- ✅ Visual tree representation with vis-network
+- ✅ Interactive node navigation  
+- ✅ Custom undo/redo with branch selection
+- ✅ Per-file history tracking
+- ✅ Efficient diff-based storage
+- ✅ Current state highlighting
+
+## 🤝 Contributing
+
+We welcome contributions! This extension is under active development and there are many opportunities to help:
+
+- **Bug Reports**: Found an issue? Please report it with steps to reproduce
+- **Feature Requests**: Have ideas for improvements? We'd love to hear them
+- **Code Contributions**: Check the planned features list for areas to contribute
+- **Documentation**: Help improve this README or add code documentation
+
+## 📚 Technical Details
+
+### Architecture
+- **Tree Storage**: Each document maintains a `CtrlZTree` instance with SHA-256 hashed nodes
+- **Diff Engine**: Custom LCS (Longest Common Subsequence) algorithm for efficient change tracking  
+- **Visualization**: Uses vis-network library for interactive graph rendering
+- **State Management**: Centralized tracking of document trees and visualization panels
+
+### File Structure
+```
+src/
+├── extension.ts    # Main extension logic and VS Code integration
+└── lcs.ts         # Diff algorithms and tree operations
+```
+
+## 📖 References
+
+- [VS Code Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+- [Original CtrlZTree Project](https://github.com/4skl/CtrlZTree)
+- [Vim UndoTree Plugin](https://github.com/mbbill/undotree)
+- [VS Code Extension API](https://code.visualstudio.com/api)
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**Enjoy enhanced undo/redo with CtrlZTree! 🌳**
