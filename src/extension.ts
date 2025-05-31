@@ -487,37 +487,42 @@ export function activate(context: vscode.ExtensionContext) {
                 async message => {
                     switch (message.command) {
                         case 'navigateToNode':
-                            let targetEditor = vscode.window.activeTextEditor;
+                            // Check if the target document is open in ANY editor group (main editor or side panels)
+                            const allVisibleEditors = vscode.window.visibleTextEditors;
+                            let targetEditor = allVisibleEditors.find(editor => editor.document.uri.toString() === docUriString);
                             
-                            // Robust document targeting with multiple fallback strategies
-                            if (!targetEditor || targetEditor.document.uri.toString() !== docUriString) {
-                                outputChannel.appendLine(`CtrlZTree: Target document ${docUriString} is not active. Current: ${targetEditor?.document.uri.toString() || 'none'}`);
-                                
-                                // Strategy 1: Find document in already open editors
-                                let targetDocument = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString);
-                                
+                            if (!targetEditor) {
+                                // Document is not currently visible in any editor group
+                                // Check if it's at least open in memory
+                                const targetDocument = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString);
                                 if (targetDocument) {
+                                    // Document exists in memory but not visible, show it in the active column
                                     try {
-                                        const newEditor = await vscode.window.showTextDocument(targetDocument, vscode.ViewColumn.Active);
-                                        targetEditor = newEditor;
-                                        outputChannel.appendLine(`CtrlZTree: Successfully switched to target document ${docUriString}`);
+                                        targetEditor = await vscode.window.showTextDocument(targetDocument, vscode.ViewColumn.Active);
+                                        outputChannel.appendLine(`CtrlZTree: Successfully opened document ${docUriString} in active editor`);
                                     } catch (e: any) {
-                                        outputChannel.appendLine(`CtrlZTree: Error switching documents: ${e.message}`);
-                                        vscode.window.showErrorMessage(`CtrlZTree: Could not switch to target document: ${e.message}`);
+                                        outputChannel.appendLine(`CtrlZTree: Error opening document: ${e.message}`);
+                                        vscode.window.showErrorMessage(`CtrlZTree: Could not open target document: ${e.message}`);
                                         return;
                                     }
                                 } else {
-                                    // Strategy 2: Try to open the document from URI
-                                    try {
-                                        const uri = vscode.Uri.parse(docUriString);
-                                        const newEditor = await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.Active });
-                                        targetEditor = newEditor;
-                                        outputChannel.appendLine(`CtrlZTree: Successfully opened target document from URI ${docUriString}`);
-                                    } catch (e: any) {
-                                        outputChannel.appendLine(`CtrlZTree: Could not open document from URI: ${e.message}`);
-                                        vscode.window.showErrorMessage('CtrlZTree: Target document is not available. Please open the file first.');
-                                        return;
-                                    }
+                                    // Document is not open at all
+                                    outputChannel.appendLine(`CtrlZTree: Target document ${docUriString} is not currently open in VS Code`);
+                                    vscode.window.showInformationMessage('CtrlZTree: The target file is not currently open. Please open the file first, then try navigation again.');
+                                    return;
+                                }
+                            } else {
+                                // Document is visible in an editor group, make it active
+                                try {
+                                    targetEditor = await vscode.window.showTextDocument(targetEditor.document, {
+                                        viewColumn: targetEditor.viewColumn,
+                                        preserveFocus: false
+                                    });
+                                    outputChannel.appendLine(`CtrlZTree: Successfully switched to document ${docUriString} in editor group ${targetEditor.viewColumn}`);
+                                } catch (e: any) {
+                                    outputChannel.appendLine(`CtrlZTree: Error switching to visible editor: ${e.message}`);
+                                    vscode.window.showErrorMessage(`CtrlZTree: Could not switch to target document: ${e.message}`);
+                                    return;
                                 }
                             }
                             
