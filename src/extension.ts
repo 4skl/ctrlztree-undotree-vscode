@@ -235,7 +235,7 @@ export function activate(context: vscode.ExtensionContext) {
                                font-src ${cspSource} https://unpkg.com data:; 
                                img-src ${cspSource} data: https:; 
                                connect-src ${cspSource};">
-                <title>CtrlZTree: ${fileName}</title>
+                <title>CtrlZTree ${fileName}</title>
                 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
                 <style>
                     #tree-visualization {
@@ -403,14 +403,12 @@ export function activate(context: vscode.ExtensionContext) {
             // FIX: Only create a new panel if the existing panel is not disposed
             const existingPanel = activeVisualizationPanels.get(docUriString);
             // Always use the correct file name for the panel title
-            let fileName = documentToShow.fileName;
+            let fileName = documentToShow.uri.path.split(/[\\/]/).pop() || 'Untitled';
             if (!fileName || fileName.trim() === '') {
-                fileName = documentToShow.uri.path.split(/[\\/]/).pop() || 'Untitled';
-            } else {
-                fileName = fileName.split(/[\\/]/).pop() || fileName;
+                fileName = 'Untitled';
             }
             if (existingPanel && typeof existingPanel.reveal === 'function') {
-                existingPanel.title = `CtrlZTree: ${fileName}`;
+                existingPanel.title = `CtrlZTree ${fileName}`;
                 const tree = getOrCreateTree(documentToShow);
                 postUpdatesToWebview(existingPanel, tree, docUriString);
                 outputChannel.appendLine(`CtrlZTree: Updating and revealing existing panel for ${docUriString}`);
@@ -422,16 +420,13 @@ export function activate(context: vscode.ExtensionContext) {
             const tree = getOrCreateTree(documentToShow);
             
             // Use the file name in the panel title (handle untitled and edge cases)
-            let fileNameForPanel = documentToShow.fileName;
+            let fileNameForPanel = documentToShow.uri.path.split(/[\\/]/).pop() || 'Untitled';
             if (!fileNameForPanel || fileNameForPanel.trim() === '') {
-                // Try to get a name for untitled files
-                fileNameForPanel = documentToShow.uri.path.split(/[\\/]/).pop() || 'Untitled';
-            } else {
-                fileNameForPanel = fileNameForPanel.split(/[\\/]/).pop() || fileNameForPanel;
+                fileNameForPanel = 'Untitled';
             }
             const panel = vscode.window.createWebviewPanel(
                 'ctrlzTreeVisualization',
-                `CtrlZTree: ${fileNameForPanel}`,
+                `CtrlZTree ${fileNameForPanel}`,
                 vscode.ViewColumn.Beside,
                 { 
                     enableScripts: true,
