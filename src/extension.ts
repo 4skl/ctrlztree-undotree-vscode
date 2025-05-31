@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { generateDiff, applyDiff, serializeDiff, deserializeDiff } from './lcs';
+import { generateDiff, applyDiff, serializeDiff, deserializeDiff, generateDiffSummary, generateUnifiedDiff } from './lcs';
 
 interface TreeNode {
     hash: string;
@@ -172,34 +172,24 @@ export function activate(context: vscode.ExtensionContext) {
 
         outputChannel.appendLine('CtrlZTree: Initializing data structures.');
 
-        // Helper function to extract meaningful changes from diff operations
-        function getDiffPreview(node: TreeNode): string {
+        // Helper function to extract meaningful changes from diff operations with git-style display
+        function getDiffPreview(node: TreeNode, tree: CtrlZTree): string {
             if (!node.diff) {
                 return "Initial state";
             }
             
             try {
-                const diffOps = deserializeDiff(node.diff);
-                const changes: string[] = [];
-                
-                for (const op of diffOps) {
-                    if (op.type === 'add' && op.content) {
-                        // Show added content
-                        const addContent = op.content.length > 50 
-                            ? op.content.substring(0, 50).replace(/\n/g, '⏎') + '...'
-                            : op.content.replace(/\n/g, '⏎');
-                        changes.push(`+${addContent}`);
-                    } else if (op.type === 'remove' && op.length && op.length > 0) {
-                        // Show that content was removed (we don't store the removed content in our optimized format)
-                        changes.push(`-${op.length} chars`);
-                    }
+                // Get the parent content to generate a proper diff
+                const parentHash = node.parent;
+                if (!parentHash) {
+                    return "Root change";
                 }
                 
-                if (changes.length === 0) {
-                    return "No changes";
-                }
+                const parentContent = tree.getContent(parentHash);
+                const currentContent = tree.getContent(node.hash);
                 
-                return changes.join(', ');
+                // Use the new generateDiffSummary function for better text-based diff display
+                return generateDiffSummary(parentContent, currentContent);
             } catch (error) {
                 return `Parse error: ${error instanceof Error ? error.message : 'Unknown error'}`;
             }
@@ -222,13 +212,13 @@ export function activate(context: vscode.ExtensionContext) {
                 const shortHash = fullHash.substring(0, 8);
                 currentFullHashMap.set(shortHash, fullHash);
                 
-                // Get only the modified part for tooltip
-                const diffPreview = getDiffPreview(node);
+                // Get git-style diff preview for tooltip
+                const diffPreview = getDiffPreview(node, tree);
                 
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: shortHash,
-                    title: `Hash: ${shortHash}\nChanges: ${diffPreview}`
+                    title: `Hash: ${shortHash}\nChanges:\n${diffPreview}`
                 });
                 if (node.parent) {
                     edgesArrayForVis.push({
@@ -489,13 +479,13 @@ export function activate(context: vscode.ExtensionContext) {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
                 
-                // Get only the modified part for tooltip
-                const diffPreview = getDiffPreview(node);
+                // Get git-style diff preview for tooltip
+                const diffPreview = getDiffPreview(node, tree);
                 
                 nodesArrayForVis.push({
                     id: shortHash, 
                     label: shortHash,
-                    title: `Hash: ${shortHash}\nChanges: ${diffPreview}`,
+                    title: `Hash: ${shortHash}\nChanges:\n${diffPreview}`,
                 });
                 
                 if (node.parent) {
