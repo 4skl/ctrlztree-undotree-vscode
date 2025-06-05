@@ -31,64 +31,96 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
                 length: matchLength
             });
         } else if (i < input1.length && (j >= input2.length || input1[i] !== input2[j])) {
-            // Characters in input1 that need to be removed
-            let removeStart = i;
-            let removeLength = 0;
-              // Look ahead to find next matching point or end
-            let nextMatchI = input1.length;
-            let nextMatchJ = j;
+            // Characters in input1 that need to be removed, and corresponding characters in input2 to be added
+            let original_i = i;
+            let original_j = j;
             
-            for (let ti = i + 1; ti < input1.length; ti++) {
-                for (let tj = j; tj < input2.length; tj++) {
+            // Look ahead to find next matching point or end
+            let nextMatchI = input1.length;
+            let nextMatchJ = j; // Default if no match found involving input2
+            
+            // Search for a common character input1[ti] === input2[tj]
+            // where ti is after current i, and tj is at or after current j.
+            for (let ti = original_i + 1; ti < input1.length; ti++) {
+                for (let tj = original_j; tj < input2.length; tj++) {
                     if (input1[ti] === input2[tj]) {
                         nextMatchI = ti;
                         nextMatchJ = tj;
-                        break;
+                        break; // Found the earliest such match
                     }
                 }
-                if (nextMatchI < input1.length) {
+                if (nextMatchI < input1.length) { // If match was found in inner loop
                     break;
                 }
             }
             
-            removeLength = nextMatchI - i;
+            // Characters from input1[original_i...nextMatchI-1] are removed
+            if (nextMatchI > original_i) {
+                operations.push({
+                    type: 'remove',
+                    position: original_i,
+                    length: nextMatchI - original_i
+                });
+            }
             
-            operations.push({
-                type: 'remove',
-                position: removeStart,
-                length: removeLength
-            });
+            // Characters from input2[original_j...nextMatchJ-1] are added
+            if (nextMatchJ > original_j) {
+                const contentToAdd = input2.slice(original_j, nextMatchJ);
+                if (contentToAdd.length > 0) {
+                    operations.push({
+                        type: 'add',
+                        position: original_j, // Position in input2
+                        content: contentToAdd
+                    });
+                }
+            }
             
             i = nextMatchI;
             j = nextMatchJ;
         } else if (j < input2.length) {
-            // Characters in input2 that need to be added
-            let addStart = j;
-            let addContent = '';
-              // Look ahead to find next matching point or end
-            let nextMatchI = i;
+            // Characters in input2 that need to be added, and corresponding characters in input1 to be removed
+            let original_i = i;
+            let original_j = j;
+
+            // Look ahead to find next matching point or end
+            let nextMatchI = i; // Default if no match found involving input1
             let nextMatchJ = input2.length;
             
-            for (let tj = j + 1; tj < input2.length; tj++) {
-                for (let ti = i; ti < input1.length; ti++) {
+            // Search for a common character input2[tj] === input1[ti]
+            // where tj is after current j, and ti is at or after current i.
+            for (let tj = original_j + 1; tj < input2.length; tj++) {
+                for (let ti = original_i; ti < input1.length; ti++) {
                     if (input2[tj] === input1[ti]) {
                         nextMatchI = ti;
                         nextMatchJ = tj;
-                        break;
+                        break; // Found the earliest such match
                     }
                 }
-                if (nextMatchJ < input2.length) {
+                if (nextMatchJ < input2.length) { // If match was found in inner loop
                     break;
                 }
             }
             
-            addContent = input2.slice(j, nextMatchJ);
+            // Characters from input1[original_i...nextMatchI-1] are removed
+            if (nextMatchI > original_i) {
+                operations.push({
+                    type: 'remove',
+                    position: original_i,
+                    length: nextMatchI - original_i
+                });
+            }
             
-            operations.push({
-                type: 'add',
-                position: addStart,
-                content: addContent
-            });
+            // Characters from input2[original_j...nextMatchJ-1] are added
+            if (nextMatchJ > original_j) {
+                const contentToAdd = input2.slice(original_j, nextMatchJ);
+                if (contentToAdd.length > 0) {
+                    operations.push({
+                        type: 'add',
+                        position: original_j, // Position in input2
+                        content: contentToAdd
+                    });
+                }
+            }
             
             i = nextMatchI;
             j = nextMatchJ;
