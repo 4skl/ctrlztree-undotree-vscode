@@ -111,7 +111,14 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.2.2 (Current)
+### 0.2.3 (Current)
+
+**Bug Fixes:**
+- ✅ **Fixed LCS Algorithm**: Resolved an algorithmic bug in the Longest Common Subsequence (LCS) implementation in `lcs.ts`
+- ✅ **Improved Diff Reliability**: Enhanced the reliability of diff generation and application
+- Better handling of edge cases in text comparison and reconstruction
+
+### 0.2.2
 
 **Repository Update:**
 - ✅ **Fixed Repository URL**: Updated package.json to point to the correct dedicated VS Code extension repository
