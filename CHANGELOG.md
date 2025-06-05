@@ -4,6 +4,11 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.3] - 2025-06-05
+
+### Fixed
+- Fixed an algorithmic bug in the Longest Common Subsequence (LCS) implementation in `lcs.ts`.
+
 ## [0.2.2] - 2025-05-31
 
 ### Fixed
