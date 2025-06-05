@@ -4,6 +4,18 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.4] - 2025-06-05
+
+### Enhanced
+- **Package Metadata**: Enhanced package.json with better description and keywords for improved discoverability
+- **Documentation**: Updated package metadata to reference the Undotree plugin inspiration
+- **Keywords**: Added comprehensive keywords including "vscode", "extension", "undotree", "history", "tree", "ctrlz"
+
+### Technical Details
+- Improved package.json metadata for better marketplace presentation
+- Enhanced project description to better communicate functionality
+- Added relevant keywords for improved search discoverability
+
 ## [0.2.3] - 2025-06-05
 
 ### Fixed

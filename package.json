@@ -1,7 +1,6 @@
 {
   "name": "ctrlztree",
-  "displayName": "CtrlZTree",
-  "description": "History of modifications in the form of a tree instead of a stack, like in the Undotree plugin.",
+  "displayName": "CtrlZTree",  "description": "History of modifications in the form of a tree instead of a stack, like in the Undotree plugin.",
   "keywords": [
     "vscode",
     "extension",
@@ -10,7 +9,7 @@
     "tree",
     "ctrlz"
   ],
-  "version": "0.2.3",
+  "version": "0.2.4",
   "publisher": "4skl",
   "icon": "icon.png",
   "repository": {

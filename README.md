@@ -111,7 +111,14 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.2.3 (Current)
+### 0.2.4 (Current)
+
+**Enhanced Package Metadata:**
+- ✅ **Improved Description**: Enhanced package.json with better description referencing the Undotree plugin inspiration
+- ✅ **Added Keywords**: Comprehensive keywords for better discoverability including "vscode", "extension", "undotree", "history", "tree", "ctrlz"
+- ✅ **Better Marketplace Presentation**: Enhanced metadata for improved VS Code Marketplace visibility
+
+### 0.2.3
 
 **Bug Fixes:**
 - ✅ **Fixed LCS Algorithm**: Resolved an algorithmic bug in the Longest Common Subsequence (LCS) implementation in `lcs.ts`
