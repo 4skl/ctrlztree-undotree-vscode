@@ -7,9 +7,8 @@
     "undotree",
     "history",
     "tree",
-    "ctrlz"
-  ],
-  "version": "0.2.4",
+    "ctrlz"  ],
+  "version": "0.2.6",
   "publisher": "4skl",
   "icon": "icon.png",
   "repository": {

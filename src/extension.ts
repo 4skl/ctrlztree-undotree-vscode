@@ -9,6 +9,7 @@ interface TreeNode {
     parent: string | null;
     children: string[];
     diff: string | null; // Serialized diff from parent to this node
+    timestamp: number; // Unix timestamp when this node was created
 }
 
 class CtrlZTree {
@@ -19,12 +20,12 @@ class CtrlZTree {
     constructor(initialDocumentContent: string) { // Content of the document when tree is first made
         this.nodes = new Map<string, TreeNode>();
         
-        const trueEmptyRootHash = this.calculateHash(this.trueEmptyRootContent);
-        const trueEmptyRootNode: TreeNode = {
+        const trueEmptyRootHash = this.calculateHash(this.trueEmptyRootContent);        const trueEmptyRootNode: TreeNode = {
             hash: trueEmptyRootHash,
             parent: null,
             children: [],
-            diff: null
+            diff: null,
+            timestamp: Date.now()
         };
         this.nodes.set(trueEmptyRootHash, trueEmptyRootNode);
         this.head = trueEmptyRootHash; // Start at the true empty root
@@ -85,13 +86,13 @@ class CtrlZTree {
         
         const diffOps = generateDiff(currentContent, content);
         const serializedDiff = serializeDiff(diffOps);
-        
-        // Create new node
+          // Create new node
         const node: TreeNode = {
             hash: newHash,
             parent: this.head,
             children: [],
-            diff: serializedDiff
+            diff: serializedDiff,
+            timestamp: Date.now()
         };
 
         // If there's a parent, add this node as child
@@ -170,57 +171,27 @@ export function activate(context: vscode.ExtensionContext) {
         let isApplyingEdit = false; 
         const processingDocuments = new Set<string>(); // Track documents currently being processed 
 
-        outputChannel.appendLine('CtrlZTree: Initializing data structures.');
-          // Helper function to extract meaningful changes from diff operations with git-style display
-        function getDiffPreview(node: TreeNode, tree: CtrlZTree): string {
-            if (!node.diff) {
-                return "Initial state";
-            }
+        // Helper function to format timestamp as "time since now"
+        function formatTimeAgo(timestamp: number): string {
+            const now = Date.now();
+            const diff = now - timestamp;
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
             
-            try {
-                // Get the parent content to generate a proper diff
-                const parentHash = node.parent;
-                if (!parentHash) {
-                    // For root node, show the initial content lines (limited)
-                    const currentContent = tree.getContent(node.hash);
-                    const lines = currentContent.split('\n').slice(0, 10); // Show first 10 lines
-                    const preview = lines.join('\n');
-                    return lines.length < currentContent.split('\n').length 
-                        ? `Initial content:\n${preview}\n... (${currentContent.split('\n').length - lines.length} more lines)`
-                        : `Initial content:\n${preview}`;
-                }
-                
-                const parentContent = tree.getContent(parentHash);
-                const currentContent = tree.getContent(node.hash);
-                
-                // Use generateDiffSummary to get the changed lines only
-                const diffSummary = generateDiffSummary(parentContent, currentContent);
-                
-                // Extract only the actual changed content lines (+ and - lines)
-                const diffLines = diffSummary.split('\n');
-                const changedLines: string[] = [];
-                
-                for (const line of diffLines) {
-                    if (line.startsWith('+') || line.startsWith('-')) {
-                        changedLines.push(line);
-                    }
-                }
-                
-                // Limit the number of changed lines shown in tooltip for readability
-                const maxLines = 15;
-                if (changedLines.length > maxLines) {
-                    const displayedLines = changedLines.slice(0, maxLines);
-                    return `${displayedLines.join('\n')}\n... (${changedLines.length - maxLines} more changes)`;
-                } else if (changedLines.length > 0) {
-                    return changedLines.join('\n');
-                } else {
-                    // Fallback if no +/- lines found, show the summary
-                    return diffSummary;
-                }
-            } catch (error) {
-                return `Parse error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            if (days > 0) {
+                return `${days} day${days > 1 ? 's' : ''} ago`;
+            } else if (hours > 0) {
+                return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            } else if (minutes > 0) {
+                return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            } else if (seconds > 5) {
+                return `${seconds} seconds ago`;
+            } else {
+                return 'Just now';
             }
-        }
+        }        outputChannel.appendLine('CtrlZTree: Initializing data structures.');
 
         // Helper function to extract just the added text for showing in tooltip after commit ID
         function getAddedTextPreview(node: TreeNode, tree: CtrlZTree): string {
@@ -259,12 +230,11 @@ export function activate(context: vscode.ExtensionContext) {
                 if (addedLines.length > 0) {
                     // Join the first few added lines, limit length
                     const preview = addedLines.slice(0, 3).join(' ');
-                    return preview.length > 80 ? preview.substring(0, 80) + '...' : preview;
-                } else {
+                    return preview.length > 80 ? preview.substring(0, 80) + '...' : preview;                } else {
                     // If no added lines, show what was modified
                     return "Modified content";
                 }
-            } catch (error) {
+            } catch {
                 return "Parse error";
             }
         }
@@ -280,16 +250,20 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (currentHeadFullHash) {
                 currentHeadShortHash = currentHeadFullHash.substring(0, 8);
-            }
-
-            nodes.forEach((node, fullHash) => {
+            }            nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
-                currentFullHashMap.set(shortHash, fullHash);                // Get added text preview for tooltip and label
+                currentFullHashMap.set(shortHash, fullHash);
+                
+                // Get added text preview for tooltip and label
                 const addedTextPreview = getAddedTextPreview(node, tree);
-                  nodesArrayForVis.push({
+                
+                // Format timestamp as "time since now"
+                const timeAgo = formatTimeAgo(node.timestamp);
+                
+                nodesArrayForVis.push({
                     id: shortHash,
-                    label: `${shortHash}\n${addedTextPreview}`,
-                    title: `Hash: ${shortHash}\n${addedTextPreview}`
+                    label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
+                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`
                 });
                 if (node.parent) {
                     edgesArrayForVis.push({
@@ -544,18 +518,18 @@ export function activate(context: vscode.ExtensionContext) {
     
             if (currentHeadFullHash) {
                 currentHeadShortHash = currentHeadFullHash.substring(0, 8);
-            }
-    
-            nodes.forEach((node, fullHash) => {
+            }            nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
                 
-                // Get git-style diff preview for tooltip
-                const diffPreview = getDiffPreview(node, tree);
-                  nodesArrayForVis.push({
-                    id: shortHash, 
-                    label: shortHash,
-                    title: `Hash: ${shortHash}\n${diffPreview}`,
+                // Get added text preview for label and timestamp for tooltip
+                const addedTextPreview = getAddedTextPreview(node, tree);
+                const timeAgo = formatTimeAgo(node.timestamp);
+                
+                nodesArrayForVis.push({
+                    id: shortHash,
+                    label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
+                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`
                 });
                 
                 if (node.parent) {
