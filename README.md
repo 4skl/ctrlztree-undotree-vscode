@@ -111,7 +111,14 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.2.4 (Current)
+### 0.2.5 (Current)
+
+**Enhanced Visualization:**
+- ✅ **Improved Node Display**: Clickable bubbles now show both commit ID and added text on separate lines
+- ✅ **Better User Experience**: Made it easier to see what content was added at each commit directly in the visual tree nodes
+- ✅ **Enhanced Readability**: Node labels display commit hash on first line and new text added on second line
+
+### 0.2.4
 
 **Enhanced Package Metadata:**
 - ✅ **Improved Description**: Enhanced package.json with better description referencing the Undotree plugin inspiration

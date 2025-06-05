@@ -171,8 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
         const processingDocuments = new Set<string>(); // Track documents currently being processed 
 
         outputChannel.appendLine('CtrlZTree: Initializing data structures.');
-        
-        // Helper function to extract meaningful changes from diff operations with git-style display
+          // Helper function to extract meaningful changes from diff operations with git-style display
         function getDiffPreview(node: TreeNode, tree: CtrlZTree): string {
             if (!node.diff) {
                 return "Initial state";
@@ -223,6 +222,53 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
 
+        // Helper function to extract just the added text for showing in tooltip after commit ID
+        function getAddedTextPreview(node: TreeNode, tree: CtrlZTree): string {
+            if (!node.diff) {
+                return "Initial commit";
+            }
+            
+            try {
+                const parentHash = node.parent;
+                if (!parentHash) {
+                    // For root node, show first line of initial content
+                    const currentContent = tree.getContent(node.hash);
+                    const firstLine = currentContent.split('\n')[0];
+                    return firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
+                }
+                
+                const parentContent = tree.getContent(parentHash);
+                const currentContent = tree.getContent(node.hash);
+                
+                // Use generateDiffSummary to get the changed lines only
+                const diffSummary = generateDiffSummary(parentContent, currentContent);
+                const diffLines = diffSummary.split('\n');
+                
+                // Extract only added lines (+ lines) and combine them
+                const addedLines: string[] = [];
+                for (const line of diffLines) {
+                    if (line.startsWith('+')) {
+                        // Remove the '+' prefix and trim
+                        const cleanLine = line.substring(1).trim();
+                        if (cleanLine.length > 0) {
+                            addedLines.push(cleanLine);
+                        }
+                    }
+                }
+                
+                if (addedLines.length > 0) {
+                    // Join the first few added lines, limit length
+                    const preview = addedLines.slice(0, 3).join(' ');
+                    return preview.length > 80 ? preview.substring(0, 80) + '...' : preview;
+                } else {
+                    // If no added lines, show what was modified
+                    return "Modified content";
+                }
+            } catch (error) {
+                return "Parse error";
+            }
+        }
+
         // Function to send updated tree data to the webview
         function postUpdatesToWebview(panel: vscode.WebviewPanel, tree: CtrlZTree, documentUriString: string) {
             const nodes = tree.getAllNodes();
@@ -238,14 +284,12 @@ export function activate(context: vscode.ExtensionContext) {
 
             nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
-                currentFullHashMap.set(shortHash, fullHash);
-                
-                // Get git-style diff preview for tooltip
-                const diffPreview = getDiffPreview(node, tree);
+                currentFullHashMap.set(shortHash, fullHash);                // Get added text preview for tooltip and label
+                const addedTextPreview = getAddedTextPreview(node, tree);
                   nodesArrayForVis.push({
                     id: shortHash,
-                    label: shortHash,
-                    title: `Hash: ${shortHash}\n${diffPreview}`
+                    label: `${shortHash}\n${addedTextPreview}`,
+                    title: `Hash: ${shortHash}\n${addedTextPreview}`
                 });
                 if (node.parent) {
                     edgesArrayForVis.push({
@@ -500,17 +544,16 @@ export function activate(context: vscode.ExtensionContext) {
     
             if (currentHeadFullHash) {
                 currentHeadShortHash = currentHeadFullHash.substring(0, 8);
-            }
-    
-            nodes.forEach((node, fullHash) => {
+            }            nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
                 
-                // Get git-style diff preview for tooltip
+                // Get git-style diff preview for tooltip and added text for label
                 const diffPreview = getDiffPreview(node, tree);
+                const addedTextPreview = getAddedTextPreview(node, tree);
                   nodesArrayForVis.push({
                     id: shortHash, 
-                    label: shortHash,
+                    label: `${shortHash}\n${addedTextPreview}`,
                     title: `Hash: ${shortHash}\n${diffPreview}`,
                 });
                 
