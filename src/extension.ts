@@ -544,16 +544,17 @@ export function activate(context: vscode.ExtensionContext) {
     
             if (currentHeadFullHash) {
                 currentHeadShortHash = currentHeadFullHash.substring(0, 8);
-            }            nodes.forEach((node, fullHash) => {
+            }
+    
+            nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
                 
-                // Get git-style diff preview for tooltip and added text for label
+                // Get git-style diff preview for tooltip
                 const diffPreview = getDiffPreview(node, tree);
-                const addedTextPreview = getAddedTextPreview(node, tree);
                   nodesArrayForVis.push({
                     id: shortHash, 
-                    label: `${shortHash}\n${addedTextPreview}`,
+                    label: shortHash,
                     title: `Hash: ${shortHash}\n${diffPreview}`,
                 });
                 

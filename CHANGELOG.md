@@ -4,18 +4,6 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [0.2.5] - 2025-06-05
-
-### Enhanced
-- **Improved Visualization**: Enhanced node labels in the tree visualization to show both commit ID and added text
-- **Better Node Display**: Clickable bubbles now display the commit hash on the first line and new text added on the second line
-- **User Experience**: Made it easier to see what content was added at each commit directly in the visual tree nodes
-
-### Technical Details
-- Modified node label generation to include both short hash and added text preview
-- Updated tooltip generation to focus on added content rather than full diff
-- Improved readability of the visual tree by showing meaningful content in each node
-
 ## [0.2.4] - 2025-06-05
 
 ### Enhanced
