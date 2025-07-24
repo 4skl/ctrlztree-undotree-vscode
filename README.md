@@ -111,7 +111,16 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.2.6 (Current)
+### 0.2.7 (Current)
+
+**Major UX Improvements:**
+- ✅ **Fixed Character-by-Character Undo**: Implemented debounced change tracking (1 second delay) to group keystrokes into logical editing units, matching VS Code's default undo behavior
+- ✅ **Cursor Position Preservation**: Added cursor position tracking and restoration during undo/redo operations - cursor now stays in the correct position after undo/redo
+- ✅ **Smart Change Detection**: Only creates new tree nodes for meaningful changes, reducing tree bloat from rapid typing
+- ✅ **Enhanced TreeNode Structure**: Added cursor position storage to each tree node for accurate position restoration
+- ✅ **Better Undo Granularity**: Users can now type "asdasdasd" and undo it as a single unit, just like VS Code's default behavior
+
+### 0.2.6
 
 **Enhanced Timestamp Functionality:**
 - ✅ **Time Since Now Display**: Added timestamp functionality showing "time since now" above commit hash in visualization bubbles

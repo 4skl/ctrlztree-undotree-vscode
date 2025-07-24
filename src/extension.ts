@@ -10,6 +10,7 @@ interface TreeNode {
     children: string[];
     diff: string | null; // Serialized diff from parent to this node
     timestamp: number; // Unix timestamp when this node was created
+    cursorPosition?: vscode.Position; // Cursor position at this state
 }
 
 class CtrlZTree {
@@ -74,7 +75,7 @@ class CtrlZTree {
     }
 
     // Set new content and compute diff
-    set(content: string): string {
+    set(content: string, cursorPosition?: vscode.Position): string {
         const newHash = this.calculateHash(content);
 
         if (this.nodes.has(newHash)) {
@@ -92,7 +93,8 @@ class CtrlZTree {
             parent: this.head,
             children: [],
             diff: serializedDiff,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            cursorPosition: cursorPosition
         };
 
         // If there's a parent, add this node as child
@@ -153,11 +155,24 @@ class CtrlZTree {
         return this.reconstructContent(targetHash);
     }
     
+    // Get cursor position for head or specific hash
+    getCursorPosition(hash?: string): vscode.Position | undefined {
+        const targetHash = hash || this.head;
+        if (!targetHash || !this.nodes.has(targetHash)) {
+            return undefined;
+        }
+        return this.nodes.get(targetHash)!.cursorPosition;
+    }
+    
     // Get all nodes for visualization
     getAllNodes(): Map<string, TreeNode> {
         return new Map(this.nodes);
     }
 }
+
+// Module-level variables for cleanup
+let documentChangeTimeouts: Map<string, NodeJS.Timeout> = new Map();
+let pendingChanges: Map<string, string> = new Map();
 
 export function activate(context: vscode.ExtensionContext) {
     let outputChannel: vscode.OutputChannel = vscode.window.createOutputChannel("CtrlZTree");
@@ -170,6 +185,8 @@ export function activate(context: vscode.ExtensionContext) {
         const panelToFullHashMap = new Map<vscode.WebviewPanel, Map<string, string>>();
         let isApplyingEdit = false; 
         const processingDocuments = new Set<string>(); // Track documents currently being processed 
+        
+        const DEBOUNCE_DELAY = 1000; // 1 second delay 
 
         // Helper function to format timestamp as "time since now"
         function formatTimeAgo(timestamp: number): string {
@@ -649,6 +666,7 @@ export function activate(context: vscode.ExtensionContext) {
                                     isApplyingEdit = true;
                                     try {
                                         const content = targetTree.getContent();
+                                        const cursorPosition = targetTree.getCursorPosition();
                                         const edit = new vscode.WorkspaceEdit();
                                         
                                         // Ensure we have the correct document reference
@@ -666,6 +684,19 @@ export function activate(context: vscode.ExtensionContext) {
                                         const applyResult = await vscode.workspace.applyEdit(edit);
                                         if (!applyResult) {
                                             throw new Error('WorkspaceEdit was not applied successfully');
+                                        }
+                                        
+                                        // Restore cursor position if available
+                                        if (cursorPosition) {
+                                            // Ensure cursor position is within document bounds
+                                            const maxLine = activeDoc.lineCount - 1;
+                                            const adjustedLine = Math.min(cursorPosition.line, maxLine);
+                                            const maxChar = activeDoc.lineAt(adjustedLine).text.length;
+                                            const adjustedChar = Math.min(cursorPosition.character, maxChar);
+                                            const adjustedPosition = new vscode.Position(adjustedLine, adjustedChar);
+                                            
+                                            targetEditor.selection = new vscode.Selection(adjustedPosition, adjustedPosition);
+                                            targetEditor.revealRange(new vscode.Range(adjustedPosition, adjustedPosition));
                                         }
                                         
                                         outputChannel.appendLine(`CtrlZTree: Successfully navigated to node ${shortHash} (${fullHash.substring(0, 16)}...)`);
@@ -708,7 +739,53 @@ export function activate(context: vscode.ExtensionContext) {
             );
         }
 
-        // Process document changes immediately (as intended for keystroke-level undo/redo)
+        // Helper function to process debounced document changes
+        function processDocumentChange(document: vscode.TextDocument, content: string) {
+            const docUriString = document.uri.toString();
+            
+            if (processingDocuments.has(docUriString)) {
+                outputChannel.appendLine(`CtrlZTree: processDocumentChange - skipping ${docUriString} due to ongoing processing.`);
+                return;
+            }
+            
+            try {
+                processingDocuments.add(docUriString);
+                
+                const tree = getOrCreateTree(document);
+                const currentTreeContent = tree.getContent();
+                
+                // Only process if the document content actually differs from tree content
+                if (content !== currentTreeContent) {
+                    // Get cursor position from active editor if it matches this document
+                    let cursorPosition: vscode.Position | undefined;
+                    const editor = vscode.window.activeTextEditor;
+                    if (editor && editor.document.uri.toString() === docUriString) {
+                        cursorPosition = editor.selection.active;
+                    }
+                    
+                    tree.set(content, cursorPosition);
+                    outputChannel.appendLine('CtrlZTree: Document changed and processed (debounced).');
+                    
+                    const panel = activeVisualizationPanels.get(docUriString);
+                    if (panel) {
+                        postUpdatesToWebview(panel, tree, docUriString);
+                        outputChannel.appendLine(`CtrlZTree: Panel for ${docUriString} updated after file change.`);
+                    } else {
+                        outputChannel.appendLine(`CtrlZTree: No panel open for ${docUriString} on file change.`);
+                    }
+                } else {
+                    outputChannel.appendLine('CtrlZTree: Document content matches tree content - skipping update.');
+                }
+            } catch (e: any) {
+                outputChannel.appendLine(`CtrlZTree: Error in processDocumentChange: ${e.message} Stack: ${e.stack}`);
+                vscode.window.showErrorMessage(`CtrlZTree processDocumentChange error: ${e.message}`);
+            } finally {
+                processingDocuments.delete(docUriString);
+                pendingChanges.delete(docUriString);
+            }
+        }
+
+        // Process document changes with debouncing for better undo granularity
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async event => {
             if (isApplyingEdit) { 
                 outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument - skipping due to isApplyingEdit.');
@@ -717,41 +794,28 @@ export function activate(context: vscode.ExtensionContext) {
             
             if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') {
                 const docUriString = event.document.uri.toString();
+                const currentText = event.document.getText();
                 
-                // Additional guard: prevent recursive processing of the same document
-                if (processingDocuments.has(docUriString)) {
-                    outputChannel.appendLine(`CtrlZTree: onDidChangeTextDocument - skipping ${docUriString} due to ongoing processing.`);
-                    return;
+                // Store the latest content for this document
+                pendingChanges.set(docUriString, currentText);
+                
+                // Clear any existing timeout for this document
+                const existingTimeout = documentChangeTimeouts.get(docUriString);
+                if (existingTimeout) {
+                    clearTimeout(existingTimeout);
                 }
                 
-                try {
-                    processingDocuments.add(docUriString);
-                    
-                    const tree = getOrCreateTree(event.document);
-                    const currentText = event.document.getText();
-                    const currentTreeContent = tree.getContent();
-                    
-                    // Only process if the document content actually differs from tree content
-                    if (currentText !== currentTreeContent) {
-                        tree.set(currentText);
-                        outputChannel.appendLine('CtrlZTree: Document changed and processed.');
-                        
-                        const panel = activeVisualizationPanels.get(docUriString);
-                        if (panel) {
-                            postUpdatesToWebview(panel, tree, docUriString);
-                            outputChannel.appendLine(`CtrlZTree: Panel for ${docUriString} updated after file change.`);
-                        } else {
-                            outputChannel.appendLine(`CtrlZTree: No panel open for ${docUriString} on file change.`);
-                        }
-                    } else {
-                        outputChannel.appendLine('CtrlZTree: Document content matches tree content - skipping update.');
+                // Set a new timeout to process the change after debounce delay
+                const newTimeout = setTimeout(() => {
+                    const pendingContent = pendingChanges.get(docUriString);
+                    if (pendingContent !== undefined) {
+                        processDocumentChange(event.document, pendingContent);
                     }
-                } catch (e: any) {
-                    outputChannel.appendLine(`CtrlZTree: Error in onDidChangeTextDocument: ${e.message} Stack: ${e.stack}`);
-                    vscode.window.showErrorMessage(`CtrlZTree onDidChangeTextDocument error: ${e.message}`);
-                } finally {
-                    processingDocuments.delete(docUriString);
-                }
+                    documentChangeTimeouts.delete(docUriString);
+                }, DEBOUNCE_DELAY);
+                
+                documentChangeTimeouts.set(docUriString, newTimeout);
+                outputChannel.appendLine(`CtrlZTree: Document change debounced for ${docUriString}`);
             }
         });
         outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument subscribed.');
@@ -771,6 +835,8 @@ export function activate(context: vscode.ExtensionContext) {
                 isApplyingEdit = true;
                 try {
                     const content = tree.getContent();
+                    const cursorPosition = tree.getCursorPosition();
+                    
                     const edit = new vscode.WorkspaceEdit();
                     edit.replace(
                         document.uri,
@@ -778,6 +844,19 @@ export function activate(context: vscode.ExtensionContext) {
                         content
                     );
                     await vscode.workspace.applyEdit(edit);
+                    
+                    // Restore cursor position if available
+                    if (cursorPosition) {
+                        // Ensure cursor position is within document bounds
+                        const maxLine = document.lineCount - 1;
+                        const adjustedLine = Math.min(cursorPosition.line, maxLine);
+                        const maxChar = document.lineAt(adjustedLine).text.length;
+                        const adjustedChar = Math.min(cursorPosition.character, maxChar);
+                        const adjustedPosition = new vscode.Position(adjustedLine, adjustedChar);
+                        
+                        editor.selection = new vscode.Selection(adjustedPosition, adjustedPosition);
+                        editor.revealRange(new vscode.Range(adjustedPosition, adjustedPosition));
+                    }
                 } catch (e: any) {
                     outputChannel.appendLine(`CtrlZTree: Error applying undo: ${e.message} Stack: ${e.stack}`);
                     vscode.window.showErrorMessage('Error applying undo: ' + e.message);
@@ -812,6 +891,8 @@ export function activate(context: vscode.ExtensionContext) {
                 isApplyingEdit = true;
                 try {
                     const content = tree.getContent(); 
+                    const cursorPosition = tree.getCursorPosition();
+                    
                     const edit = new vscode.WorkspaceEdit();
                     edit.replace(
                         document.uri,
@@ -819,6 +900,19 @@ export function activate(context: vscode.ExtensionContext) {
                         content
                     );
                     await vscode.workspace.applyEdit(edit);
+                    
+                    // Restore cursor position if available
+                    if (cursorPosition) {
+                        // Ensure cursor position is within document bounds
+                        const maxLine = document.lineCount - 1;
+                        const adjustedLine = Math.min(cursorPosition.line, maxLine);
+                        const maxChar = document.lineAt(adjustedLine).text.length;
+                        const adjustedChar = Math.min(cursorPosition.character, maxChar);
+                        const adjustedPosition = new vscode.Position(adjustedLine, adjustedChar);
+                        
+                        editor.selection = new vscode.Selection(adjustedPosition, adjustedPosition);
+                        editor.revealRange(new vscode.Range(adjustedPosition, adjustedPosition));
+                    }
                 } catch (e: any) {
                     outputChannel.appendLine(`CtrlZTree: Error applying redo (single head): ${e.message} Stack: ${e.stack}`);
                     vscode.window.showErrorMessage('Error applying redo: ' + e.message);
@@ -855,6 +949,8 @@ export function activate(context: vscode.ExtensionContext) {
                     isApplyingEdit = true;
                     try {
                         const content = tree.getContent(); // Content of newly selected head
+                        const cursorPosition = tree.getCursorPosition();
+                        
                         const edit = new vscode.WorkspaceEdit();
                         edit.replace(
                             document.uri,
@@ -862,6 +958,19 @@ export function activate(context: vscode.ExtensionContext) {
                             content
                         );
                         await vscode.workspace.applyEdit(edit);
+                        
+                        // Restore cursor position if available
+                        if (cursorPosition) {
+                            // Ensure cursor position is within document bounds
+                            const maxLine = document.lineCount - 1;
+                            const adjustedLine = Math.min(cursorPosition.line, maxLine);
+                            const maxChar = document.lineAt(adjustedLine).text.length;
+                            const adjustedChar = Math.min(cursorPosition.character, maxChar);
+                            const adjustedPosition = new vscode.Position(adjustedLine, adjustedChar);
+                            
+                            editor.selection = new vscode.Selection(adjustedPosition, adjustedPosition);
+                            editor.revealRange(new vscode.Range(adjustedPosition, adjustedPosition));
+                        }
                     } catch (e: any) {
                         outputChannel.appendLine(`CtrlZTree: Error applying redo edit (branch selection): ${e.message} Stack: ${e.stack}`);
                         vscode.window.showErrorMessage('Error applying redo: ' + e.message);
@@ -909,4 +1018,11 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
-export function deactivate() {}
+export function deactivate() {
+    // Clean up any pending timeouts
+    for (const timeout of documentChangeTimeouts.values()) {
+        clearTimeout(timeout);
+    }
+    documentChangeTimeouts.clear();
+    pendingChanges.clear();
+}

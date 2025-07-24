@@ -4,6 +4,26 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.7] - 2025-07-24
+
+### Fixed
+- **Character-by-Character Undo Issue**: Implemented debounced change tracking with 1-second delay to group keystrokes into logical editing units
+- **Lost Cursor Position**: Added cursor position tracking and restoration during undo/redo operations
+- **Undo Granularity**: Now matches VS Code's default behavior - typing "asdasdasd" and pressing Ctrl+Z removes the entire text, not character by character
+
+### Enhanced
+- **Smart Change Detection**: Only creates new tree nodes for meaningful changes, reducing unnecessary tree bloat
+- **Enhanced TreeNode Structure**: Added `cursorPosition` field to store cursor position at each state
+- **Better UX**: Undo/redo now behaves more like users expect from a text editor
+
+### Technical Details
+- Added debouncing mechanism for document changes to prevent excessive tree node creation
+- Implemented cursor position preservation across all undo/redo operations including webview navigation
+- Enhanced `CtrlZTree.set()` method to accept cursor position parameter
+- Added `getCursorPosition()` method to retrieve stored cursor positions
+- Added proper cleanup of pending timeouts in deactivate function
+- Improved change detection to only process meaningful document differences
+
 ## [0.2.6] - 2025-06-05
 
 ### Enhanced
