@@ -4,6 +4,53 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.0] - 2025-01-15
+
+### Enhanced
+- **New Reset Icon**: Updated reset button to use cleaning sponge emoji (🧽) for better visual representation
+- **Major Version Milestone**: Bumped to 0.3.0 to reflect the significant feature additions and stability improvements
+
+### Technical Details
+- Changed reset button emoji from 🗑️ to 🧽 to better represent the "clean slate" functionality
+- This version represents a stable milestone with toolbar functionality, theme integration, and action-based grouping
+
+## [0.2.12] - 2025-01-15
+
+### Added
+- **Reset Button**: Added reset button (🔄 Reset) to start fresh tree from current document state
+- **Complete Tree Reset**: Clears all history and tracking, creates new tree with current content
+
+### Fixed
+- **Reload Timestamp Updates**: Fixed reload button to properly recalculate relative timestamps ("X minutes ago")
+- **Proper State Cleanup**: Reset functionality clears all tracking maps and timeouts for clean start
+
+### Enhanced
+- **Improved Toolbar**: Two-button toolbar with reload and reset functionality
+- **Better Button Styling**: Consistent button styling with hover states and visual differentiation
+- **State Management**: Better handling of document state transitions and cleanup
+
+### Technical Details
+- Reset button removes existing tree and creates fresh CtrlZTree instance
+- Clears lastChangeTime, lastCursorPosition, lastChangeType, and pendingChanges maps
+- Cancels any pending timeouts for the document
+- Reload button now properly regenerates timestamps by calling postUpdatesToWebview
+
+## [0.2.11] - 2025-01-15
+
+### Added
+- **Reload Button**: Added a reload button (🔄) to the tree visualization toolbar
+- **Manual Tree Refresh**: Users can now manually refresh the tree view if needed
+- **Theme-Aware Button Styling**: Reload button follows VS Code theme colors and hover states
+
+### Enhanced
+- **Better Error Recovery**: Reload functionality helps recover from visualization issues
+- **Improved UX**: Easy access to tree refresh without closing and reopening the panel
+
+### Technical Details
+- Added fixed-position toolbar with reload button in top-right corner
+- Implemented `requestTreeReload` message handling between webview and extension
+- Added proper error handling and logging for reload operations
+
 ## [0.2.10] - 2025-01-15
 
 ### Fixed

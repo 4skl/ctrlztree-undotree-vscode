@@ -1,4 +1,4 @@
-// The module 'vscode' contains the VS Code extensibility API
+﻿// The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
@@ -415,6 +415,48 @@ export function activate(context: vscode.ExtensionContext) {
                         font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
                     }
                     
+                    #toolbar {
+                        position: fixed;
+                        top: 10px;
+                        right: 10px;
+                        z-index: 1000;
+                        background-color: var(--vscode-background);
+                        border: 1px solid var(--vscode-border);
+                        border-radius: 3px;
+                        padding: 5px;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                        display: flex;
+                        gap: 5px;
+                    }
+                    
+                    .toolbar-btn {
+                        background-color: var(--vscode-button-background, var(--vscode-accent));
+                        color: var(--vscode-button-foreground, var(--vscode-foreground));
+                        border: none;
+                        border-radius: 2px;
+                        padding: 6px 12px;
+                        cursor: pointer;
+                        font-size: 12px;
+                        font-family: inherit;
+                        transition: background-color 0.2s;
+                    }
+                    
+                    .toolbar-btn:hover {
+                        background-color: var(--vscode-button-hoverBackground, var(--vscode-hover));
+                    }
+                    
+                    .toolbar-btn:active {
+                        background-color: var(--vscode-button-secondaryBackground, var(--vscode-current));
+                    }
+                    
+                    #reset-btn {
+                        background-color: var(--vscode-button-secondaryBackground, #5a5a5a);
+                    }
+                    
+                    #reset-btn:hover {
+                        background-color: var(--vscode-errorBackground, #d73a49);
+                    }
+                    
                     #tree-visualization {
                         width: 100%;
                         height: 100vh;
@@ -434,6 +476,10 @@ export function activate(context: vscode.ExtensionContext) {
                 </style>
             </head>
             <body>
+                <div id="toolbar">
+                    <button id="reload-btn" class="toolbar-btn" title="Reload Tree Visualization">🔄 Reload</button>
+                    <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
+                </div>
                 <div id="tree-visualization"></div>
                 <script>
                 try {
@@ -449,6 +495,34 @@ export function activate(context: vscode.ExtensionContext) {
                     console.log('CtrlZTree Webview: Initial currentHeadNodeId:', currentHeadNodeId);
                     const container = document.getElementById('tree-visualization');
                     console.log('CtrlZTree Webview: Container element:', container ? 'found' : 'NOT FOUND');
+                    
+                    // Setup reload button
+                    const reloadBtn = document.getElementById('reload-btn');
+                    if (reloadBtn) {
+                        reloadBtn.addEventListener('click', () => {
+                            console.log('CtrlZTree Webview: Reload button clicked');
+                            vscode.postMessage({
+                                command: 'requestTreeReload'
+                            });
+                        });
+                        console.log('CtrlZTree Webview: Reload button event listener added');
+                    } else {
+                        console.error('CtrlZTree Webview: Reload button not found');
+                    }
+                    
+                    // Setup reset button
+                    const resetBtn = document.getElementById('reset-btn');
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', () => {
+                            console.log('CtrlZTree Webview: Reset button clicked');
+                            vscode.postMessage({
+                                command: 'requestTreeReset'
+                            });
+                        });
+                        console.log('CtrlZTree Webview: Reset button event listener added');
+                    } else {
+                        console.error('CtrlZTree Webview: Reset button not found');
+                    }
 
                     function initializeOrUpdateNetwork(newNodesArray, newEdgesArray, headNodeId) {
                         console.log('CtrlZTree Webview: initializeOrUpdateNetwork called. Target Head ID:', headNodeId);
@@ -907,6 +981,74 @@ export function activate(context: vscode.ExtensionContext) {
                                 vscode.window.showErrorMessage('CtrlZTree: Could not navigate. Tree not available or hash not found.');
                             }
                             return;
+                        case 'requestTreeReload':
+                            outputChannel.appendLine(`CtrlZTree: Tree reload requested for ${docUriString}`);
+                            try {
+                                // Get the current document
+                                const targetDocument = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString);
+                                if (targetDocument) {
+                                    const tree = getOrCreateTree(targetDocument);
+                                    // Force refresh the webview with current tree state (timestamps will be recalculated)
+                                    postUpdatesToWebview(panel, tree, docUriString);
+                                    outputChannel.appendLine(`CtrlZTree: Tree reloaded successfully for ${docUriString}`);
+                                } else {
+                                    outputChannel.appendLine(`CtrlZTree: Could not find document for reload: ${docUriString}`);
+                                    vscode.window.showWarningMessage('CtrlZTree: Could not reload - document not found');
+                                }
+                            } catch (e: any) {
+                                outputChannel.appendLine(`CtrlZTree: Error during tree reload: ${e.message} Stack: ${e.stack}`);
+                                vscode.window.showErrorMessage(`CtrlZTree reload error: ${e.message}`);
+                            }
+                            return;
+                        case 'requestTreeReset':
+                            outputChannel.appendLine(`CtrlZTree: Tree reset requested for ${docUriString}`);
+                            try {
+                                // Get the current document
+                                const targetDocument = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString);
+                                if (targetDocument) {
+                                    // Remove the existing tree from the history
+                                    historyTrees.delete(docUriString);
+                                    
+                                    // Create a new tree with the current document content
+                                    const newTree = new CtrlZTree(targetDocument.getText());
+                                    historyTrees.set(docUriString, newTree);
+                                    
+                                    // Get cursor position from active editor if it matches this document
+                                    let cursorPosition: vscode.Position | undefined;
+                                    const editor = vscode.window.activeTextEditor;
+                                    if (editor && editor.document.uri.toString() === docUriString) {
+                                        cursorPosition = editor.selection.active;
+                                    }
+                                    
+                                    // Set the current content as the initial state with cursor position
+                                    if (cursorPosition) {
+                                        newTree.set(targetDocument.getText(), cursorPosition);
+                                    }
+                                    
+                                    // Clear tracking maps for this document to start fresh
+                                    lastChangeTime.delete(docUriString);
+                                    lastCursorPosition.delete(docUriString);
+                                    lastChangeType.delete(docUriString);
+                                    pendingChanges.delete(docUriString);
+                                    const existingTimeout = documentChangeTimeouts.get(docUriString);
+                                    if (existingTimeout) {
+                                        clearTimeout(existingTimeout);
+                                        documentChangeTimeouts.delete(docUriString);
+                                    }
+                                    
+                                    // Update the webview with the new tree
+                                    postUpdatesToWebview(panel, newTree, docUriString);
+                                    outputChannel.appendLine(`CtrlZTree: Tree reset successfully for ${docUriString}`);
+                                    vscode.window.showInformationMessage('CtrlZTree: Tree reset - starting fresh from current state');
+                                } else {
+                                    outputChannel.appendLine(`CtrlZTree: Could not find document for reset: ${docUriString}`);
+                                    vscode.window.showWarningMessage('CtrlZTree: Could not reset - document not found');
+                                }
+                            } catch (e: any) {
+                                outputChannel.appendLine(`CtrlZTree: Error during tree reset: ${e.message} Stack: ${e.stack}`);
+                                vscode.window.showErrorMessage(`CtrlZTree reset error: ${e.message}`);
+                            }
+                            return;
                         case 'webviewError':
                             outputChannel.appendLine(`CtrlZTree: Webview CRITICAL ERROR: ${message.error.message} Stack: ${message.error.stack}`);
                             vscode.window.showErrorMessage(`CtrlZTree Webview Critical Error: ${message.error.message}. Check CtrlZTree output channel.`);
@@ -1255,3 +1397,6 @@ export function deactivate() {
     lastCursorPosition.clear();
     lastChangeType.clear();
 }
+
+
+
