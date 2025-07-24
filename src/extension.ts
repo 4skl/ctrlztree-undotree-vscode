@@ -173,6 +173,9 @@ class CtrlZTree {
 // Module-level variables for cleanup
 let documentChangeTimeouts: Map<string, NodeJS.Timeout> = new Map();
 let pendingChanges: Map<string, string> = new Map();
+let lastChangeTime: Map<string, number> = new Map();
+let lastCursorPosition: Map<string, vscode.Position> = new Map();
+let lastChangeType: Map<string, 'typing' | 'deletion' | 'other'> = new Map();
 
 export function activate(context: vscode.ExtensionContext) {
     let outputChannel: vscode.OutputChannel = vscode.window.createOutputChannel("CtrlZTree");
@@ -186,7 +189,60 @@ export function activate(context: vscode.ExtensionContext) {
         let isApplyingEdit = false; 
         const processingDocuments = new Set<string>(); // Track documents currently being processed 
         
-        const DEBOUNCE_DELAY = 1000; // 1 second delay 
+        const ACTION_TIMEOUT = 500; // Shorter timeout for action boundaries
+        const PAUSE_THRESHOLD = 1500; // If user pauses longer than this, create new action
+        
+        // Helper function to determine if changes should be grouped
+        function shouldGroupWithPreviousChange(
+            docUriString: string, 
+            currentText: string, 
+            currentPosition: vscode.Position,
+            changeType: 'typing' | 'deletion' | 'other'
+        ): boolean {
+            const lastTime = lastChangeTime.get(docUriString);
+            const lastPos = lastCursorPosition.get(docUriString);
+            const lastType = lastChangeType.get(docUriString);
+            const now = Date.now();
+            
+            // If no previous change, don't group
+            if (!lastTime || !lastPos || !lastType) {
+                return false;
+            }
+            
+            // If too much time has passed, don't group
+            if (now - lastTime > PAUSE_THRESHOLD) {
+                return false;
+            }
+            
+            // If change type switched (typing to deletion or vice versa), don't group
+            if (changeType !== lastType && lastType !== 'other' && changeType !== 'other') {
+                return false;
+            }
+            
+            // If cursor moved to a non-adjacent position, don't group
+            const posDiff = Math.abs(currentPosition.line - lastPos.line) + 
+                           Math.abs(currentPosition.character - lastPos.character);
+            
+            // Allow grouping if:
+            // 1. Same line and cursor moved by 1 character (typing/deletion)
+            // 2. Same position (replacement)
+            // 3. Adjacent lines with reasonable character difference (multiline edit)
+            if (posDiff > 10) { // Arbitrary threshold for "too far apart"
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Helper function to detect change type
+        function detectChangeType(oldContent: string, newContent: string): 'typing' | 'deletion' | 'other' {
+            if (newContent.length > oldContent.length) {
+                return 'typing';
+            } else if (newContent.length < oldContent.length) {
+                return 'deletion';
+            }
+            return 'other';
+        } 
 
         // Helper function to format timestamp as "time since now"
         function formatTimeAgo(timestamp: number): string {
@@ -905,7 +961,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
 
-        // Process document changes with debouncing for better undo granularity
+        // Process document changes with action-based grouping for better undo granularity
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async event => {
             if (isApplyingEdit) { 
                 outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument - skipping due to isApplyingEdit.');
@@ -915,6 +971,29 @@ export function activate(context: vscode.ExtensionContext) {
             if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') {
                 const docUriString = event.document.uri.toString();
                 const currentText = event.document.getText();
+                const editor = vscode.window.activeTextEditor;
+                
+                // Get current cursor position if this is the active document
+                let currentPosition: vscode.Position | undefined;
+                if (editor && editor.document.uri.toString() === docUriString) {
+                    currentPosition = editor.selection.active;
+                }
+                
+                // Determine change type and whether to group
+                const tree = getOrCreateTree(event.document);
+                const lastContent = tree.getContent();
+                const changeType = detectChangeType(lastContent, currentText);
+                
+                const shouldGroup = currentPosition ? 
+                    shouldGroupWithPreviousChange(docUriString, currentText, currentPosition, changeType) : 
+                    false;
+                
+                // Update tracking info
+                lastChangeTime.set(docUriString, Date.now());
+                if (currentPosition) {
+                    lastCursorPosition.set(docUriString, currentPosition);
+                }
+                lastChangeType.set(docUriString, changeType);
                 
                 // Store the latest content for this document
                 pendingChanges.set(docUriString, currentText);
@@ -925,17 +1004,20 @@ export function activate(context: vscode.ExtensionContext) {
                     clearTimeout(existingTimeout);
                 }
                 
-                // Set a new timeout to process the change after debounce delay
+                // If we shouldn't group, process immediately, otherwise use shorter timeout
+                const delay = shouldGroup ? ACTION_TIMEOUT : 50; // Process ungrouped changes almost immediately
+                
+                // Set a new timeout to process the change
                 const newTimeout = setTimeout(() => {
                     const pendingContent = pendingChanges.get(docUriString);
                     if (pendingContent !== undefined) {
                         processDocumentChange(event.document, pendingContent);
                     }
                     documentChangeTimeouts.delete(docUriString);
-                }, DEBOUNCE_DELAY);
+                }, delay);
                 
                 documentChangeTimeouts.set(docUriString, newTimeout);
-                outputChannel.appendLine(`CtrlZTree: Document change debounced for ${docUriString}`);
+                outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, delay: ${delay}ms, type: ${changeType})`);
             }
         });
         outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument subscribed.');
@@ -1156,4 +1238,7 @@ export function deactivate() {
     }
     documentChangeTimeouts.clear();
     pendingChanges.clear();
+    lastChangeTime.clear();
+    lastCursorPosition.clear();
+    lastChangeType.clear();
 }

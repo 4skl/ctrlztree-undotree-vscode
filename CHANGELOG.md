@@ -4,6 +4,24 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.9] - 2025-01-15
+
+### Enhanced
+- **Action-Based History**: Replaced time-based debouncing with intelligent action-based grouping
+- **Smart Change Detection**: Groups changes based on user intent rather than arbitrary time delays
+- **Natural Edit Boundaries**: Creates new history nodes at logical breakpoints (cursor movement, change type switches, long pauses)
+- **Improved Granularity**: Better balance between too many micro-changes and overly grouped changes
+
+### Technical Details
+- Implemented action-based change grouping algorithm that considers:
+  - Change type (typing vs deletion vs other)
+  - Cursor position continuity
+  - Time gaps between changes (1.5s threshold for forced breaks)
+  - Edit locality (prevents grouping distant changes)
+- Reduced timeout for grouped changes to 500ms, ungrouped changes to 50ms
+- Added change type detection and cursor position tracking
+- Enhanced debugging output for change grouping decisions
+
 ## [0.2.8] - 2025-01-15
 
 ### Enhanced
