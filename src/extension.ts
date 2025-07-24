@@ -328,13 +328,40 @@ export function activate(context: vscode.ExtensionContext) {
                 <title>CtrlZTree ${fileName}</title>
                 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
                 <style>
+                    :root {
+                        /* VS Code theme-aware colors */
+                        --vscode-background: var(--vscode-editor-background, #1e1e1e);
+                        --vscode-foreground: var(--vscode-editor-foreground, #d4d4d4);
+                        --vscode-accent: var(--vscode-focusBorder, #007acc);
+                        --vscode-current: var(--vscode-list-activeSelectionBackground, #094771);
+                        --vscode-border: var(--vscode-panel-border, #2d2d30);
+                        --vscode-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+                    }
+                    
+                    body {
+                        background-color: var(--vscode-background);
+                        color: var(--vscode-foreground);
+                        margin: 0;
+                        padding: 0;
+                        font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+                    }
+                    
                     #tree-visualization {
                         width: 100%;
-                        height: 100vh; /* Full viewport height */
-                        border: 1px solid lightgray;
+                        height: 100vh;
+                        border: 1px solid var(--vscode-border);
+                        background-color: var(--vscode-background);
                     }
+                    
+                    /* Ensure vis-network respects theme */
+                    .vis-network canvas {
+                        background-color: var(--vscode-background) !important;
+                    }
+                    
                     /* Fallback: pointer cursor on node hover */
-                    .vis-network:hover { cursor: pointer !important; }
+                    .vis-network:hover { 
+                        cursor: pointer !important; 
+                    }
                 </style>
             </head>
             <body>
@@ -368,16 +395,34 @@ export function activate(context: vscode.ExtensionContext) {
                         console.log('CtrlZTree Webview: All node IDs in DataSet:', JSON.stringify(allNodeIds));
                         console.log('CtrlZTree Webview: Current head for coloring:', currentHeadNodeId);
 
+                        // Get CSS custom property values for theme-aware colors
+                        const computedStyle = getComputedStyle(document.documentElement);
+                        const accentColor = computedStyle.getPropertyValue('--vscode-accent').trim() || '#007acc';
+                        const currentColor = computedStyle.getPropertyValue('--vscode-current').trim() || '#094771';
+                        const foregroundColor = computedStyle.getPropertyValue('--vscode-foreground').trim() || '#d4d4d4';
+                        const backgroundColor = computedStyle.getPropertyValue('--vscode-background').trim() || '#1e1e1e';
+
                         const colorUpdates = allNodeIds.map(nodeId => {
                             const isHead = nodeId === currentHeadNodeId;
                             return {
                                 id: nodeId,
-                                color: isHead ? '#ff0000' : '#3333ff'
+                                color: {
+                                    background: isHead ? currentColor : accentColor,
+                                    border: foregroundColor,
+                                    highlight: {
+                                        background: isHead ? currentColor : accentColor,
+                                        border: foregroundColor
+                                    }
+                                },
+                                font: {
+                                    color: foregroundColor,
+                                    size: 12
+                                }
                             };
                         });
 
                         if (colorUpdates.length > 0) {
-                            console.log('CtrlZTree Webview: Applying color updates. Head update (or first):', JSON.stringify(colorUpdates.find(u => u.color === '#ff0000') || colorUpdates[0]));
+                            console.log('CtrlZTree Webview: Applying theme-aware color updates. Head update (or first):', JSON.stringify(colorUpdates.find(u => u.id === currentHeadNodeId) || colorUpdates[0]));
                             nodes.update(colorUpdates);
                         } else {
                             console.log('CtrlZTree Webview: No color updates to apply (nodeset might be empty).');
@@ -389,6 +434,13 @@ export function activate(context: vscode.ExtensionContext) {
                                 nodes: nodes,
                                 edges: edges
                             };
+                            
+                            // Get theme colors for network configuration
+                            const computedStyle = getComputedStyle(document.documentElement);
+                            const foregroundColor = computedStyle.getPropertyValue('--vscode-foreground').trim() || '#d4d4d4';
+                            const backgroundColor = computedStyle.getPropertyValue('--vscode-background').trim() || '#1e1e1e';
+                            const borderColor = computedStyle.getPropertyValue('--vscode-border').trim() || '#2d2d30';
+                            
                             const options = {
                                 layout: {
                                     hierarchical: {
@@ -404,7 +456,40 @@ export function activate(context: vscode.ExtensionContext) {
                                 },
                                 nodes: {
                                     shape: 'box',
-                                    margin: 10
+                                    margin: 10,
+                                    borderWidth: 2,
+                                    font: {
+                                        color: foregroundColor,
+                                        size: 12,
+                                        face: 'monospace'
+                                    },
+                                    chosen: {
+                                        node: function(values, id, selected, hovering) {
+                                            values.borderWidth = 3;
+                                        }
+                                    }
+                                },
+                                edges: {
+                                    color: {
+                                        color: foregroundColor,
+                                        highlight: foregroundColor,
+                                        hover: foregroundColor
+                                    },
+                                    width: 2,
+                                    arrows: {
+                                        to: {
+                                            enabled: true,
+                                            scaleFactor: 0.5
+                                        }
+                                    },
+                                    smooth: {
+                                        type: 'cubicBezier',
+                                        forceDirection: 'vertical',
+                                        roundness: 0.4
+                                    }
+                                },
+                                physics: {
+                                    enabled: false
                                 }
                             };
                             network = new vis.Network(container, data, options);
@@ -451,12 +536,47 @@ export function activate(context: vscode.ExtensionContext) {
                         console.error('CtrlZTree Webview: Cannot initialize network, container not found.');
                     }
 
+                    // Listen for theme changes
                     window.addEventListener('message', event => {
                         const message = event.data;
                         console.log('CtrlZTree Webview: Received message command:', message.command);
                         switch (message.command) {
                             case 'updateTree':
                                 initializeOrUpdateNetwork(message.nodes, message.edges, message.headShortHash);
+                                break;
+                            case 'updateTheme':
+                                // Re-apply colors when theme changes
+                                if (network) {
+                                    const allNodeIds = nodes.getIds();
+                                    const computedStyle = getComputedStyle(document.documentElement);
+                                    const accentColor = computedStyle.getPropertyValue('--vscode-accent').trim() || '#007acc';
+                                    const currentColor = computedStyle.getPropertyValue('--vscode-current').trim() || '#094771';
+                                    const foregroundColor = computedStyle.getPropertyValue('--vscode-foreground').trim() || '#d4d4d4';
+                                    
+                                    const colorUpdates = allNodeIds.map(nodeId => {
+                                        const isHead = nodeId === currentHeadNodeId;
+                                        return {
+                                            id: nodeId,
+                                            color: {
+                                                background: isHead ? currentColor : accentColor,
+                                                border: foregroundColor,
+                                                highlight: {
+                                                    background: isHead ? currentColor : accentColor,
+                                                    border: foregroundColor
+                                                }
+                                            },
+                                            font: {
+                                                color: foregroundColor,
+                                                size: 12
+                                            }
+                                        };
+                                    });
+                                    
+                                    if (colorUpdates.length > 0) {
+                                        nodes.update(colorUpdates);
+                                        console.log('CtrlZTree Webview: Updated colors for theme change');
+                                    }
+                                }
                                 break;
                         }
                     });
@@ -820,6 +940,17 @@ export function activate(context: vscode.ExtensionContext) {
         });
         outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument subscribed.');
         
+        // Listen for color theme changes to update webview styling
+        const themeChangeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
+            outputChannel.appendLine('CtrlZTree: Color theme changed, updating webviews...');
+            // Notify all active webviews about theme change
+            for (const panel of activeVisualizationPanels.values()) {
+                if (panel.visible) {
+                    panel.webview.postMessage({ command: 'updateTheme' });
+                }
+            }
+        });
+        
         outputChannel.appendLine('CtrlZTree: Registering undo command...');
         const undoCommand = vscode.commands.registerCommand('ctrlztree.undo', async () => {
             outputChannel.appendLine('CtrlZTree: undo command invoked.');
@@ -1002,7 +1133,7 @@ export function activate(context: vscode.ExtensionContext) {
         });
         outputChannel.appendLine('CtrlZTree: visualize command registered.');
 
-        context.subscriptions.push(changeDocumentSubscription, undoCommand, redoCommand, visualizeCommand);
+        context.subscriptions.push(changeDocumentSubscription, themeChangeSubscription, undoCommand, redoCommand, visualizeCommand);
         outputChannel.appendLine('CtrlZTree: All commands and subscriptions pushed.');
 
         outputChannel.appendLine('CtrlZTree: Extension activation completed successfully.');

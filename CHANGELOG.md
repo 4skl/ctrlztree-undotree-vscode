@@ -4,6 +4,19 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.8] - 2025-01-15
+
+### Enhanced
+- **Theme-Aware Styling**: Tree visualization now adapts to VS Code's current color theme
+- **Dynamic Color Integration**: Automatically uses theme colors for nodes, edges, and background
+- **Better Visual Integration**: Extension now feels native to VS Code's interface
+- **Automatic Theme Updates**: Visualization updates instantly when switching between light/dark themes
+
+### Technical Details
+- Implemented CSS custom properties integration with VS Code's theming system
+- Added theme change detection and dynamic color computation
+- Enhanced webview styling with proper theme variable usage
+
 ## [0.2.7] - 2025-07-24
 
 ### Fixed
