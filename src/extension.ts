@@ -215,20 +215,29 @@ export function activate(context: vscode.ExtensionContext) {
             }
             
             // If change type switched (typing to deletion or vice versa), don't group
-            if (changeType !== lastType && lastType !== 'other' && changeType !== 'other') {
+            // Don't allow grouping 'other' with anything to be more conservative
+            if (changeType !== lastType) {
                 return false;
             }
             
-            // If cursor moved to a non-adjacent position, don't group
-            const posDiff = Math.abs(currentPosition.line - lastPos.line) + 
-                           Math.abs(currentPosition.character - lastPos.character);
+            // More sophisticated cursor position analysis
+            const lineDiff = Math.abs(currentPosition.line - lastPos.line);
+            const charDiff = Math.abs(currentPosition.character - lastPos.character);
             
-            // Allow grouping if:
-            // 1. Same line and cursor moved by 1 character (typing/deletion)
-            // 2. Same position (replacement)
-            // 3. Adjacent lines with reasonable character difference (multiline edit)
-            if (posDiff > 10) { // Arbitrary threshold for "too far apart"
-                return false;
+            // Don't group if:
+            // 1. Different lines with more than 1 line difference
+            // 2. Same line but cursor jumped more than reasonable typing distance
+            // 3. Multi-line change with large character jumps
+            if (lineDiff > 1) {
+                return false; // More than 1 line apart
+            }
+            
+            if (lineDiff === 0 && charDiff > 20) {
+                return false; // Same line but too far apart
+            }
+            
+            if (lineDiff === 1 && charDiff > 10) {
+                return false; // Adjacent lines but big character jump
             }
             
             return true;
@@ -236,12 +245,16 @@ export function activate(context: vscode.ExtensionContext) {
         
         // Helper function to detect change type
         function detectChangeType(oldContent: string, newContent: string): 'typing' | 'deletion' | 'other' {
-            if (newContent.length > oldContent.length) {
+            const lengthDiff = newContent.length - oldContent.length;
+            
+            if (lengthDiff > 0) {
                 return 'typing';
-            } else if (newContent.length < oldContent.length) {
+            } else if (lengthDiff < 0) {
                 return 'deletion';
+            } else {
+                // Same length could be replacement - check if content actually changed
+                return oldContent === newContent ? 'other' : 'typing'; // Treat replacements as typing
             }
-            return 'other';
         } 
 
         // Helper function to format timestamp as "time since now"
@@ -1017,7 +1030,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }, delay);
                 
                 documentChangeTimeouts.set(docUriString, newTimeout);
-                outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, delay: ${delay}ms, type: ${changeType})`);
+                outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, delay: ${delay}ms, type: ${changeType}, cursor: ${currentPosition?.line}:${currentPosition?.character})`);
             }
         });
         outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument subscribed.');

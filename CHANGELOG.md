@@ -4,6 +4,20 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.10] - 2025-01-15
+
+### Fixed
+- **Improved Change Type Detection**: Better handling of replacement operations (select + type)
+- **More Precise Cursor Position Analysis**: Fixed flawed distance calculation for grouping decisions
+- **Conservative Grouping Logic**: Stricter rules to prevent inappropriate grouping of different action types
+- **Enhanced Position Logic**: Separate handling for same-line vs multi-line cursor movements
+
+### Technical Details
+- Fixed change type detection to treat same-length replacements as 'typing' operations
+- Improved cursor position analysis with separate thresholds for line vs character differences
+- Removed permissive grouping of 'other' change types for more predictable behavior
+- Added enhanced debugging output with cursor position tracking
+
 ## [0.2.9] - 2025-01-15
 
 ### Enhanced
