@@ -404,32 +404,91 @@ export function generateDiffSummary(originalContent: string, newContent: string)
     const changes: string[] = [];
     let addedLines = 0;
     let removedLines = 0;
+    let addedSpaces = 0;
+    let removedSpaces = 0;
+    let hasContentChanges = false;
     
     for (const op of lineDiff) {
         if (op.type === 'add') {
             addedLines += op.lines.length;
-            // Show preview of added content using unified formatting
             const rawContent = op.lines.join(' ');
+            
+            // Count spaces in added content
+            const spaceCount = (rawContent.match(/\s/g) || []).length;
+            addedSpaces += spaceCount;
+            
+            // Check if there's actual content (not just whitespace)
             if (rawContent.trim()) {
+                hasContentChanges = true;
                 const formattedContent = formatTextForDiffDisplay(rawContent);
                 changes.push(`+${formattedContent}`);
+            } else if (rawContent.length > 0) {
+                // Only whitespace was added
+                const description = op.lines.length === 1 && op.lines[0] === '' ? 
+                    'empty line' : 
+                    `${spaceCount} whitespace char${spaceCount !== 1 ? 's' : ''}`;
+                changes.push(`+${description}`);
             }
         } else if (op.type === 'remove') {
             removedLines += op.lines.length;
-            // Show preview of removed content using unified formatting
             const rawContent = op.lines.join(' ');
+            
+            // Count spaces in removed content
+            const spaceCount = (rawContent.match(/\s/g) || []).length;
+            removedSpaces += spaceCount;
+            
+            // Check if there's actual content (not just whitespace)
             if (rawContent.trim()) {
+                hasContentChanges = true;
                 const formattedContent = formatTextForDiffDisplay(rawContent);
                 changes.push(`-${formattedContent}`);
+            } else if (rawContent.length > 0) {
+                // Only whitespace was removed
+                const description = op.lines.length === 1 && op.lines[0] === '' ? 
+                    'empty line' : 
+                    `${spaceCount} whitespace char${spaceCount !== 1 ? 's' : ''}`;
+                changes.push(`-${description}`);
             }
         }
     }
     
-    if (changes.length === 0) {
+    // If no changes detected at all, check for direct content differences
+    if (changes.length === 0 && addedLines === 0 && removedLines === 0) {
+        if (originalContent !== newContent) {
+            // There must be some character-level changes
+            const originalSpaces = (originalContent.match(/\s/g) || []).length;
+            const newSpaces = (newContent.match(/\s/g) || []).length;
+            const spaceDiff = newSpaces - originalSpaces;
+            
+            if (spaceDiff > 0) {
+                return `+${spaceDiff} whitespace char${spaceDiff !== 1 ? 's' : ''}`;
+            } else if (spaceDiff < 0) {
+                return `-${Math.abs(spaceDiff)} whitespace char${Math.abs(spaceDiff) !== 1 ? 's' : ''}`;
+            } else {
+                return "Character replacements";
+            }
+        }
         return "No changes";
     }
     
-    const summary = `${addedLines > 0 ? `+${addedLines}` : ''}${removedLines > 0 ? ` -${removedLines}` : ''} lines`;
+    // Build summary
+    let summary = '';
+    if (addedLines > 0 || removedLines > 0) {
+        summary = `${addedLines > 0 ? `+${addedLines}` : ''}${removedLines > 0 ? ` -${removedLines}` : ''} lines`;
+    }
+    
+    // Add whitespace info if there were significant whitespace changes without content
+    if (!hasContentChanges && (addedSpaces > 0 || removedSpaces > 0)) {
+        const spaceInfo = [];
+        if (addedSpaces > 0) spaceInfo.push(`+${addedSpaces} spaces`);
+        if (removedSpaces > 0) spaceInfo.push(`-${removedSpaces} spaces`);
+        if (summary) {
+            summary += `, ${spaceInfo.join(', ')}`;
+        } else {
+            summary = spaceInfo.join(', ');
+        }
+    }
+    
     return `${summary}\n${changes.slice(0, 3).join('\n')}${changes.length > 3 ? '\n...' : ''}`;
 }
 
