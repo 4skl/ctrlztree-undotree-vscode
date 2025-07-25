@@ -4,7 +4,7 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [0.3.1] - 2025-01-25
+## [0.3.1] - 2025-07-25
 
 ### Added
 - **Alternative Redo Keybinding**: Added Ctrl+Shift+Z (Cmd+Shift+Z on Mac) as alternative to Ctrl+Y for redo operations
@@ -32,7 +32,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Improved node styling with dynamic font size, bold text, and border thickness for active node
 - Fixed diff display to show both additions and removals for complete change visibility
 
-## [0.3.0] - 2025-01-25
+## [0.3.0] - 2025-07-25
 
 ### Enhanced
 - **Improved Text Formatting**: Implemented middle ellipsis display for long text content
@@ -56,7 +56,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Better handling of edge cases in text content analysis
 - Improved middle ellipsis formatting for multi-line content display
 
-## [0.2.12] - 2025-01-15
+## [0.2.12] - 2025-07-25
 
 ### Added
 - **Reset Button**: Added reset button (🔄 Reset) to start fresh tree from current document state
@@ -77,7 +77,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Cancels any pending timeouts for the document
 - Reload button now properly regenerates timestamps by calling postUpdatesToWebview
 
-## [0.2.11] - 2025-01-15
+## [0.2.11] - 2025-07-25
 
 ### Added
 - **Reload Button**: Added a reload button (🔄) to the tree visualization toolbar
@@ -93,7 +93,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Implemented `requestTreeReload` message handling between webview and extension
 - Added proper error handling and logging for reload operations
 
-## [0.2.10] - 2025-01-15
+## [0.2.10] - 2025-07-25
 
 ### Fixed
 - **Improved Change Type Detection**: Better handling of replacement operations (select + type)
@@ -107,7 +107,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Removed permissive grouping of 'other' change types for more predictable behavior
 - Added enhanced debugging output with cursor position tracking
 
-## [0.2.9] - 2025-01-15
+## [0.2.9] - 2025-07-25
 
 ### Enhanced
 - **Action-Based History**: Replaced time-based debouncing with intelligent action-based grouping
@@ -125,7 +125,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Added change type detection and cursor position tracking
 - Enhanced debugging output for change grouping decisions
 
-## [0.2.8] - 2025-01-15
+## [0.2.8] - 2025-07-25
 
 ### Enhanced
 - **Theme-Aware Styling**: Tree visualization now adapts to VS Code's current color theme
