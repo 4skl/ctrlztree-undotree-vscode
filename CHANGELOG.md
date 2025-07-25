@@ -4,6 +4,27 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.1] - 2025-01-25
+
+### Added
+- **Alternative Redo Keybinding**: Added Ctrl+Shift+Z (Cmd+Shift+Z on Mac) as alternative to Ctrl+Y for redo operations
+  - Matches common editor behavior where Ctrl+Shift+Z acts as redo
+  - Both Ctrl+Y and Ctrl+Shift+Z now work for redo functionality
+- **Smart Empty File Undo**: Enhanced undo behavior for empty files
+  - When file is empty and Ctrl+Z is pressed, jumps to the latest non-empty state in history
+  - Prevents getting stuck in empty states when undoing from an empty file
+  - Falls back to regular undo if no non-empty states are found
+
+### Enhanced
+- **Improved Undo Logic**: Better handling of edge cases in undo operations
+- **User Experience**: More intuitive behavior when working with empty files and multiple keybinding preferences
+
+### Technical Details
+- Added `findLatestNonEmptyState()` method to locate most recent non-empty content
+- Added `zToLatestNonEmpty()` method for special empty-file undo behavior
+- Enhanced undo command with smart content detection and conditional logic
+- Added third keybinding entry for Ctrl+Shift+Z redo support
+
 ## [0.3.0] - 2025-01-25
 
 ### Enhanced

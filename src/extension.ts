@@ -120,6 +120,46 @@ class CtrlZTree {
         return null;
     }
 
+    // Find the latest non-empty state from current position
+    findLatestNonEmptyState(): string | null {
+        if (!this.head) { return null; }
+        
+        // Check if current state is non-empty
+        const currentContent = this.getContent(this.head);
+        if (currentContent.trim() !== '') {
+            return this.head; // Current state is already non-empty
+        }
+        
+        // Search through all nodes to find the most recent non-empty one
+        let latestNonEmptyHash: string | null = null;
+        let latestTimestamp = 0;
+        
+        for (const [hash, node] of this.nodes) {
+            // Skip the empty root
+            if (hash === this.calculateHash(this.trueEmptyRootContent)) {
+                continue;
+            }
+            
+            const content = this.getContent(hash);
+            if (content.trim() !== '' && node.timestamp > latestTimestamp) {
+                latestNonEmptyHash = hash;
+                latestTimestamp = node.timestamp;
+            }
+        }
+        
+        return latestNonEmptyHash;
+    }
+
+    // Special undo for empty files - goes to latest non-empty state
+    zToLatestNonEmpty(): string | null {
+        const latestNonEmpty = this.findLatestNonEmptyState();
+        if (latestNonEmpty && latestNonEmpty !== this.head) {
+            this.head = latestNonEmpty;
+            return this.head;
+        }
+        return null;
+    }
+
     // Move head to child (redo) or return list of children
     y(): string | string[] {
         if (!this.head) { return []; }
@@ -1195,7 +1235,23 @@ export function activate(context: vscode.ExtensionContext) {
             const document = editor.document;
             const tree = getOrCreateTree(document);
             
-            const newHead = tree.z();
+            // Check if current file is empty and use special behavior
+            const currentContent = document.getText();
+            let newHead: string | null;
+            
+            if (currentContent.trim() === '') {
+                // File is empty, try to go to latest non-empty state
+                newHead = tree.zToLatestNonEmpty();
+                if (newHead) {
+                    outputChannel.appendLine('CtrlZTree: File is empty, jumping to latest non-empty state.');
+                } else {
+                    // No non-empty state found, use regular undo
+                    newHead = tree.z();
+                }
+            } else {
+                // File has content, use regular undo
+                newHead = tree.z();
+            }
             
             if (newHead) {
                 isApplyingEdit = true;
