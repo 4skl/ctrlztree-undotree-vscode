@@ -402,12 +402,14 @@ export function generateDiffSummary(originalContent: string, newContent: string)
     const lineDiff = generateLineDiff(originalLines, newLines);
     
     const changes: string[] = [];
+    const whitespaceChanges: string[] = [];
     let addedLines = 0;
     let removedLines = 0;
     let addedChars = 0;
     let removedChars = 0;
     let hasContentChanges = false;
     
+    // First pass: process all operations and categorize changes
     for (const op of lineDiff) {
         if (op.type === 'add') {
             addedLines += op.lines.length;
@@ -430,11 +432,11 @@ export function generateDiffSummary(originalContent: string, newContent: string)
                 const formattedContent = formatTextForDiffDisplay(rawContent);
                 changes.push(`+${formattedContent}`);
             } else if (rawContent.length > 0) {
-                // Only whitespace was added
+                // Only whitespace was added - store separately
                 const description = op.lines.length === 1 && op.lines[0] === '' ? 
                     'empty line' : 
                     'whitespace';
-                changes.push(`+${description}`);
+                whitespaceChanges.push(`+${description}`);
             }
         } else if (op.type === 'remove') {
             removedLines += op.lines.length;
@@ -457,17 +459,20 @@ export function generateDiffSummary(originalContent: string, newContent: string)
                 const formattedContent = formatTextForDiffDisplay(rawContent);
                 changes.push(`-${formattedContent}`);
             } else if (rawContent.length > 0) {
-                // Only whitespace was removed
+                // Only whitespace was removed - store separately
                 const description = op.lines.length === 1 && op.lines[0] === '' ? 
                     'empty line' : 
                     'whitespace';
-                changes.push(`-${description}`);
+                whitespaceChanges.push(`-${description}`);
             }
         }
     }
     
+    // Second pass: decide what to show based on whether we have content changes
+    const finalChanges = hasContentChanges ? changes : [...changes, ...whitespaceChanges];
+    
     // If no changes detected at all, check for direct content differences
-    if (changes.length === 0 && addedLines === 0 && removedLines === 0) {
+    if (finalChanges.length === 0 && addedLines === 0 && removedLines === 0) {
         if (originalContent !== newContent) {
             // There must be some character-level changes
             const charDiff = newContent.length - originalContent.length;
@@ -545,7 +550,7 @@ export function generateDiffSummary(originalContent: string, newContent: string)
         summary = "Content modified";
     }
     
-    return `${summary}\n${changes.slice(0, 3).join('\n')}${changes.length > 3 ? '\n...' : ''}`;
+    return `${summary}\n${finalChanges.slice(0, 3).join('\n')}${finalChanges.length > 3 ? '\n...' : ''}`;
 }
 
 // Helper interfaces for line-based diffs
