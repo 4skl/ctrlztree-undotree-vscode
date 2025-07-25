@@ -4,6 +4,18 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.2] - 2025-07-25
+
+### Enhanced
+- **Documentation Update**: Updated README.md to reflect all features and changes through version 0.3.1
+- **Comprehensive Feature Documentation**: Added documentation for all recent features including alternative keybindings, smart empty file undo, and current node prominence
+- **Release Notes Synchronization**: Synchronized README with CHANGELOG for consistent documentation
+
+### Technical Details
+- Updated README.md with complete feature list and release history
+- Added documentation for smart empty file undo behavior
+- Enhanced feature descriptions for better user understanding
+
 ## [0.3.1] - 2025-07-25
 
 ### Added

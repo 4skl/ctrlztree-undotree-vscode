@@ -2,8 +2,6 @@
 
 CtrlZTree brings tree-based undo/redo functionality to VS Code, inspired by the [undotree for Vim](https://github.com/mbbill/undotree). Unlike traditional linear undo/redo that loses alternative edit paths, CtrlZTree preserves all your editing history in a branching tree structure.
 
-This project is based on the original [CtrlZTree](https://github.com/4skl/CtrlZTree) concept, adapted specifically for VS Code.
-
 ## ✨ Features
 
 ### 🌳 Tree-Based History
@@ -13,6 +11,8 @@ This project is based on the original [CtrlZTree](https://github.com/4skl/CtrlZT
 
 ### 🎯 Enhanced Undo/Redo
 - **Custom Undo/Redo**: Replaces VS Code's default Ctrl+Z/Ctrl+Y with tree-aware operations
+- **Alternative Keybinding**: Ctrl+Shift+Z (Cmd+Shift+Z on Mac) also works for redo operations
+- **Smart Empty File Undo**: When file is empty and you press Ctrl+Z, automatically jumps to the latest non-empty state
 - **Branch Selection**: When multiple redo paths exist, choose which branch to follow
 - **Content Preview**: See previews of document states when selecting branches
 
@@ -52,14 +52,16 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 ### Default Keybindings
 - `Ctrl+Z` (Windows/Linux) / `Cmd+Z` (Mac) - CtrlZTree Undo
 - `Ctrl+Y` (Windows/Linux) / `Cmd+Y` (Mac) - CtrlZTree Redo
+- `Ctrl+Shift+Z` (Windows/Linux) / `Cmd+Shift+Z` (Mac) - CtrlZTree Redo (Alternative)
 
 ### Visualization Panel
 1. Run the **"CtrlZTree: Visualize History Tree"** command
 2. A new panel opens showing your edit history as an interactive graph
-3. **Current state** is highlighted in red, **other states** in blue
-4. **Click any node** to instantly navigate to that document state
-5. **Hover over nodes** to see enhanced tooltips with concise change previews
-6. **Panel title** shows "CtrlZTree \<filename\>" for easy identification
+3. **Current state** is prominently displayed at the top level with enhanced styling (larger, bold text and thicker border)
+4. **Other states** appear in blue with standard styling
+5. **Click any node** to instantly navigate to that document state
+6. **Hover over nodes** to see enhanced tooltips with concise change previews
+7. **Panel title** shows "CtrlZTree \<filename\>" for easy identification
 
 ### Enhanced Tooltips (v0.2.0)
 - **Git-style Diffs**: Tooltips show only the actual changed lines (+ and - lines)
@@ -111,7 +113,72 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.2.7 (Current)
+### 0.3.2 (Current)
+
+**Documentation & Maintenance Update:**
+- ✅ **Updated Documentation**: Comprehensive README update to reflect all features from 0.3.1 and 0.3.0
+- ✅ **Enhanced Feature Descriptions**: Improved documentation of smart empty file undo and current node prominence
+- ✅ **Complete Release History**: Full changelog integration with detailed feature descriptions
+
+### 0.3.1
+
+**Enhanced User Experience & Visual Improvements:**
+- ✅ **Alternative Redo Keybinding**: Added Ctrl+Shift+Z (Cmd+Shift+Z on Mac) as alternative to Ctrl+Y for redo operations
+- ✅ **Smart Empty File Undo**: Enhanced undo behavior for empty files - when file is empty and Ctrl+Z is pressed, jumps to the latest non-empty state in history
+- ✅ **Current Node Prominence**: The active/current node now appears visually prominent in the tree view
+  - Current node is positioned at the top level of the hierarchy 
+  - Enhanced visual styling with larger, bold text and thicker border
+  - Makes it easier to identify which state you're currently viewing
+- ✅ **Improved Diff Display**: Fixed diff display logic to show both additions and removals for complete change visibility
+- ✅ **Enhanced Whitespace Handling**: Better handling of whitespace-only changes in diff summaries
+
+### 0.3.0
+
+**Text Formatting & Diff Enhancements:**
+- ✅ **Improved Text Formatting**: Implemented middle ellipsis display for long text content (first 37 chars + "..." + last 37 chars)
+- ✅ **Smart Diff Summaries**: Enhanced diff summary logic showing net changes instead of separate additions/deletions
+- ✅ **Pure Newline Detection**: Detects pure newline changes and displays as "+1 newline" instead of "+1 chars"
+- ✅ **Unified Text Formatting**: Consistent formatting across all node displays and diff summaries
+- ✅ **Reset Button Icon**: Updated reset button to use cleaning sponge emoji (🧽) for better visual representation
+- ✅ **Function Conflicts Resolution**: Resolved conflicts between generateDiffSummary and formatTextForNodeDisplay functions
+
+### 0.2.12
+
+**Reset & Reload Functionality:**
+- ✅ **Reset Button**: Added reset button to start fresh tree from current document state
+- ✅ **Complete Tree Reset**: Clears all history and tracking, creates new tree with current content
+- ✅ **Reload Timestamp Updates**: Fixed reload button to properly recalculate relative timestamps
+- ✅ **Improved Toolbar**: Two-button toolbar with reload and reset functionality
+
+### 0.2.11
+
+**Manual Refresh Capability:**
+- ✅ **Reload Button**: Added a reload button to the tree visualization toolbar
+- ✅ **Manual Tree Refresh**: Users can now manually refresh the tree view if needed
+- ✅ **Theme-Aware Button Styling**: Reload button follows VS Code theme colors and hover states
+
+### 0.2.10
+
+**Improved Change Detection:**
+- ✅ **Better Change Type Detection**: Enhanced handling of replacement operations (select + type)
+- ✅ **Precise Cursor Position Analysis**: Fixed distance calculation for grouping decisions
+- ✅ **Conservative Grouping Logic**: Stricter rules to prevent inappropriate grouping of different action types
+
+### 0.2.9
+
+**Action-Based History:**
+- ✅ **Intelligent Change Grouping**: Replaced time-based debouncing with action-based grouping
+- ✅ **Smart Change Detection**: Groups changes based on user intent rather than arbitrary time delays
+- ✅ **Natural Edit Boundaries**: Creates new history nodes at logical breakpoints
+
+### 0.2.8
+
+**Theme Integration:**
+- ✅ **Theme-Aware Styling**: Tree visualization now adapts to VS Code's current color theme
+- ✅ **Dynamic Color Integration**: Automatically uses theme colors for nodes, edges, and background
+- ✅ **Automatic Theme Updates**: Visualization updates instantly when switching between light/dark themes
+
+### 0.2.7
 
 **Major UX Improvements:**
 - ✅ **Fixed Character-by-Character Undo**: Implemented debounced change tracking (1 second delay) to group keystrokes into logical editing units, matching VS Code's default undo behavior
@@ -211,7 +278,6 @@ src/
 ## 📖 References
 
 - [VS Code Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-- [Original CtrlZTree Project](https://github.com/4skl/CtrlZTree)
 - [Vim UndoTree Plugin](https://github.com/mbbill/undotree)
 - [VS Code Extension API](https://code.visualstudio.com/api)
 
