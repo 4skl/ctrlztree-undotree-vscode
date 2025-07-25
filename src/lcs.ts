@@ -404,18 +404,25 @@ export function generateDiffSummary(originalContent: string, newContent: string)
     const changes: string[] = [];
     let addedLines = 0;
     let removedLines = 0;
-    let addedSpaces = 0;
-    let removedSpaces = 0;
+    let addedChars = 0;
+    let removedChars = 0;
     let hasContentChanges = false;
     
     for (const op of lineDiff) {
         if (op.type === 'add') {
             addedLines += op.lines.length;
-            const rawContent = op.lines.join(' ');
             
-            // Count spaces in added content
-            const spaceCount = (rawContent.match(/\s/g) || []).length;
-            addedSpaces += spaceCount;
+            // Count all characters in added content
+            for (const line of op.lines) {
+                addedChars += line.length;
+                // Count newlines except for the last line (since split removes the final newline)
+                if (op.lines.indexOf(line) < op.lines.length - 1) {
+                    addedChars += 1; // for the newline character
+                }
+            }
+            
+            // For display purposes, join with space
+            const rawContent = op.lines.join(' ');
             
             // Check if there's actual content (not just whitespace)
             if (rawContent.trim()) {
@@ -426,16 +433,23 @@ export function generateDiffSummary(originalContent: string, newContent: string)
                 // Only whitespace was added
                 const description = op.lines.length === 1 && op.lines[0] === '' ? 
                     'empty line' : 
-                    `${spaceCount} whitespace char${spaceCount !== 1 ? 's' : ''}`;
+                    'whitespace';
                 changes.push(`+${description}`);
             }
         } else if (op.type === 'remove') {
             removedLines += op.lines.length;
-            const rawContent = op.lines.join(' ');
             
-            // Count spaces in removed content
-            const spaceCount = (rawContent.match(/\s/g) || []).length;
-            removedSpaces += spaceCount;
+            // Count all characters in removed content
+            for (const line of op.lines) {
+                removedChars += line.length;
+                // Count newlines except for the last line
+                if (op.lines.indexOf(line) < op.lines.length - 1) {
+                    removedChars += 1; // for the newline character
+                }
+            }
+            
+            // For display purposes, join with space
+            const rawContent = op.lines.join(' ');
             
             // Check if there's actual content (not just whitespace)
             if (rawContent.trim()) {
@@ -446,7 +460,7 @@ export function generateDiffSummary(originalContent: string, newContent: string)
                 // Only whitespace was removed
                 const description = op.lines.length === 1 && op.lines[0] === '' ? 
                     'empty line' : 
-                    `${spaceCount} whitespace char${spaceCount !== 1 ? 's' : ''}`;
+                    'whitespace';
                 changes.push(`-${description}`);
             }
         }
@@ -456,14 +470,12 @@ export function generateDiffSummary(originalContent: string, newContent: string)
     if (changes.length === 0 && addedLines === 0 && removedLines === 0) {
         if (originalContent !== newContent) {
             // There must be some character-level changes
-            const originalSpaces = (originalContent.match(/\s/g) || []).length;
-            const newSpaces = (newContent.match(/\s/g) || []).length;
-            const spaceDiff = newSpaces - originalSpaces;
+            const charDiff = newContent.length - originalContent.length;
             
-            if (spaceDiff > 0) {
-                return `+${spaceDiff} whitespace char${spaceDiff !== 1 ? 's' : ''}`;
-            } else if (spaceDiff < 0) {
-                return `-${Math.abs(spaceDiff)} whitespace char${Math.abs(spaceDiff) !== 1 ? 's' : ''}`;
+            if (charDiff > 0) {
+                return `+${charDiff} chars`;
+            } else if (charDiff < 0) {
+                return `-${Math.abs(charDiff)} chars`;
             } else {
                 return "Character replacements";
             }
@@ -471,22 +483,33 @@ export function generateDiffSummary(originalContent: string, newContent: string)
         return "No changes";
     }
     
-    // Build summary
+    // Build summary - show net changes
     let summary = '';
-    if (addedLines > 0 || removedLines > 0) {
-        summary = `${addedLines > 0 ? `+${addedLines}` : ''}${removedLines > 0 ? ` -${removedLines}` : ''} lines`;
+    
+    // Calculate net line changes
+    const netLines = addedLines - removedLines;
+    if (netLines !== 0) {
+        if (netLines > 0) {
+            summary = `+${netLines} lines`;
+        } else {
+            summary = `-${Math.abs(netLines)} lines`;
+        }
     }
     
-    // Add whitespace info if there were significant whitespace changes without content
-    if (!hasContentChanges && (addedSpaces > 0 || removedSpaces > 0)) {
-        const spaceInfo = [];
-        if (addedSpaces > 0) spaceInfo.push(`+${addedSpaces} spaces`);
-        if (removedSpaces > 0) spaceInfo.push(`-${removedSpaces} spaces`);
+    // Calculate net character changes
+    const netChars = addedChars - removedChars;
+    if (netChars !== 0) {
+        const charPart = netChars > 0 ? `+${netChars} chars` : `-${Math.abs(netChars)} chars`;
         if (summary) {
-            summary += `, ${spaceInfo.join(', ')}`;
+            summary += `, ${charPart}`;
         } else {
-            summary = spaceInfo.join(', ');
+            summary = charPart;
         }
+    }
+    
+    // If no net changes but we had changes, show that
+    if (!summary && (addedLines > 0 || removedLines > 0 || addedChars > 0 || removedChars > 0)) {
+        summary = "Content modified";
     }
     
     return `${summary}\n${changes.slice(0, 3).join('\n')}${changes.length > 3 ? '\n...' : ''}`;
