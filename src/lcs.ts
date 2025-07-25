@@ -376,6 +376,25 @@ function groupIntoHunks(operations: LineDiffOperation[], contextLines: number): 
     return hunks;
 }
 
+// Helper function to format text with middle ellipsis (same logic as formatTextForNodeDisplay)
+function formatTextForDiffDisplay(text: string): string {
+    if (!text || text.trim() === '') {
+        return "Empty content";
+    }
+    
+    // Clean the text: remove excessive whitespace, normalize line breaks
+    const cleanText = text.replace(/\s+/g, ' ').trim();
+    
+    // Apply middle ellipsis format if text is too long
+    if (cleanText.length > 80) {
+        // Show first 37 chars + newline + ... + newline + last 37 chars
+        return cleanText.substring(0, 37) + '\n...\n' + 
+               cleanText.substring(cleanText.length - 37);
+    }
+    
+    return cleanText;
+}
+
 // Generate a concise diff summary for tooltips
 export function generateDiffSummary(originalContent: string, newContent: string): string {
     const originalLines = originalContent.split('\n');
@@ -389,17 +408,19 @@ export function generateDiffSummary(originalContent: string, newContent: string)
     for (const op of lineDiff) {
         if (op.type === 'add') {
             addedLines += op.lines.length;
-            // Show preview of added content
-            const preview = op.lines.slice(0, 2).join(' ').substring(0, 100);
-            if (preview.trim()) {
-                changes.push(`+${preview}${op.lines.length > 2 || preview.length >= 100 ? '...' : ''}`);
+            // Show preview of added content using unified formatting
+            const rawContent = op.lines.join(' ');
+            if (rawContent.trim()) {
+                const formattedContent = formatTextForDiffDisplay(rawContent);
+                changes.push(`+${formattedContent}`);
             }
         } else if (op.type === 'remove') {
             removedLines += op.lines.length;
-            // Show preview of removed content
-            const preview = op.lines.slice(0, 2).join(' ').substring(0, 100);
-            if (preview.trim()) {
-                changes.push(`-${preview}${op.lines.length > 2 || preview.length >= 100 ? '...' : ''}`);
+            // Show preview of removed content using unified formatting
+            const rawContent = op.lines.join(' ');
+            if (rawContent.trim()) {
+                const formattedContent = formatTextForDiffDisplay(rawContent);
+                changes.push(`-${formattedContent}`);
             }
         }
     }

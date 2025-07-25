@@ -279,6 +279,25 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }        outputChannel.appendLine('CtrlZTree: Initializing data structures.');
 
+        // Unified function to format any text content for node display
+        function formatTextForNodeDisplay(text: string): string {
+            if (!text || text.trim() === '') {
+                return "Empty content";
+            }
+            
+            // Clean the text: remove excessive whitespace, normalize line breaks
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            
+            // Apply middle ellipsis format if text is too long
+            if (cleanText.length > 80) {
+                // Show first 37 chars + newline + ... + newline + last 37 chars
+                return cleanText.substring(0, 37) + '\n...\n' + 
+                       cleanText.substring(cleanText.length - 37);
+            }
+            
+            return cleanText;
+        }
+
         // Helper function to extract just the added text for showing in tooltip after commit ID
         function getAddedTextPreview(node: TreeNode, tree: CtrlZTree): string {
             if (!node.diff) {
@@ -288,38 +307,17 @@ export function activate(context: vscode.ExtensionContext) {
             try {
                 const parentHash = node.parent;
                 if (!parentHash) {
-                    // For root node, show first line of initial content
+                    // For root node, show content
                     const currentContent = tree.getContent(node.hash);
-                    const firstLine = currentContent.split('\n')[0];
-                    return firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
+                    return formatTextForNodeDisplay(currentContent);
                 }
                 
                 const parentContent = tree.getContent(parentHash);
                 const currentContent = tree.getContent(node.hash);
                 
-                // Use generateDiffSummary to get the changed lines only
-                const diffSummary = generateDiffSummary(parentContent, currentContent);
-                const diffLines = diffSummary.split('\n');
+                // Use generateDiffSummary which now has unified formatting
+                return generateDiffSummary(parentContent, currentContent);
                 
-                // Extract only added lines (+ lines) and combine them
-                const addedLines: string[] = [];
-                for (const line of diffLines) {
-                    if (line.startsWith('+')) {
-                        // Remove the '+' prefix and trim
-                        const cleanLine = line.substring(1).trim();
-                        if (cleanLine.length > 0) {
-                            addedLines.push(cleanLine);
-                        }
-                    }
-                }
-                
-                if (addedLines.length > 0) {
-                    // Join the first few added lines, limit length
-                    const preview = addedLines.slice(0, 3).join(' ');
-                    return preview.length > 80 ? preview.substring(0, 80) + '...' : preview;                } else {
-                    // If no added lines, show what was modified
-                    return "Modified content";
-                }
             } catch {
                 return "Parse error";
             }
