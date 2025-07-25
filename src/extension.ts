@@ -597,8 +597,12 @@ export function activate(context: vscode.ExtensionContext) {
                                 },
                                 font: {
                                     color: foregroundColor,
-                                    size: 12
-                                }
+                                    size: isHead ? 14 : 12, // Make current node text larger
+                                    bold: isHead ? true : false // Make current node text bold
+                                },
+                                // Position current node above others in hierarchy
+                                level: isHead ? 0 : undefined,
+                                borderWidth: isHead ? 3 : 2 // Make current node border thicker
                             };
                         });
 
@@ -627,8 +631,9 @@ export function activate(context: vscode.ExtensionContext) {
                                     hierarchical: {
                                         direction: 'UD',
                                         sortMethod: 'directed',
-                                        levelSeparation: 100,
-                                        nodeSpacing: 100
+                                        levelSeparation: 120, // Increased spacing between levels
+                                        nodeSpacing: 150,     // Increased spacing between nodes
+                                        shakeTowards: 'roots' // Prefer positioning towards root nodes
                                     }
                                 },
                                 interaction: { 

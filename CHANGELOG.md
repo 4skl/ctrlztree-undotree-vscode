@@ -18,12 +18,19 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Enhanced
 - **Improved Undo Logic**: Better handling of edge cases in undo operations
 - **User Experience**: More intuitive behavior when working with empty files and multiple keybinding preferences
+- **Current Node Prominence**: The active/current node now appears visually prominent in the tree view
+  - Current node is positioned at the top level of the hierarchy 
+  - Enhanced visual styling with larger, bold text and thicker border
+  - Makes it easier to identify which state you're currently viewing
 
 ### Technical Details
 - Added `findLatestNonEmptyState()` method to locate most recent non-empty content
 - Added `zToLatestNonEmpty()` method for special empty-file undo behavior
 - Enhanced undo command with smart content detection and conditional logic
 - Added third keybinding entry for Ctrl+Shift+Z redo support
+- Enhanced tree visualization with hierarchical positioning for current node
+- Improved node styling with dynamic font size, bold text, and border thickness for active node
+- Fixed diff display to show both additions and removals for complete change visibility
 
 ## [0.3.0] - 2025-01-25
 
