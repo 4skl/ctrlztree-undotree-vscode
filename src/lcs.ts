@@ -472,10 +472,23 @@ export function generateDiffSummary(originalContent: string, newContent: string)
             // There must be some character-level changes
             const charDiff = newContent.length - originalContent.length;
             
-            if (charDiff > 0) {
-                return `+${charDiff} chars`;
-            } else if (charDiff < 0) {
-                return `-${Math.abs(charDiff)} chars`;
+            if (charDiff !== 0) {
+                // Check if it's purely newlines
+                const originalNewlines = (originalContent.match(/\r?\n/g) || []).length;
+                const newNewlines = (newContent.match(/\r?\n/g) || []).length;
+                const newlineDiff = newNewlines - originalNewlines;
+                
+                // If char change equals newline change (accounting for \r\n vs \n), it's purely newlines
+                const isOnlyNewlines = Math.abs(charDiff) === Math.abs(newlineDiff) || 
+                                       Math.abs(charDiff) === Math.abs(newlineDiff * 2); // for \r\n
+                
+                if (isOnlyNewlines && newlineDiff !== 0) {
+                    return newlineDiff > 0 ? 
+                        `+${newlineDiff} newline${newlineDiff !== 1 ? 's' : ''}` : 
+                        `-${Math.abs(newlineDiff)} newline${Math.abs(newlineDiff) !== 1 ? 's' : ''}`;
+                } else {
+                    return charDiff > 0 ? `+${charDiff} chars` : `-${Math.abs(charDiff)} chars`;
+                }
             } else {
                 return "Character replacements";
             }
@@ -490,20 +503,40 @@ export function generateDiffSummary(originalContent: string, newContent: string)
     const netLines = addedLines - removedLines;
     if (netLines !== 0) {
         if (netLines > 0) {
-            summary = `+${netLines} lines`;
+            summary = `+${netLines} line${netLines !== 1 ? 's' : ''}`;
         } else {
-            summary = `-${Math.abs(netLines)} lines`;
+            summary = `-${Math.abs(netLines)} line${Math.abs(netLines) !== 1 ? 's' : ''}`;
         }
     }
     
     // Calculate net character changes
     const netChars = addedChars - removedChars;
     if (netChars !== 0) {
-        const charPart = netChars > 0 ? `+${netChars} chars` : `-${Math.abs(netChars)} chars`;
-        if (summary) {
-            summary += `, ${charPart}`;
+        // Check if the changes are purely newlines
+        const originalNewlines = (originalContent.match(/\r?\n/g) || []).length;
+        const newNewlines = (newContent.match(/\r?\n/g) || []).length;
+        const netNewlines = newNewlines - originalNewlines;
+        
+        // If net char change equals net newlines (accounting for \r\n vs \n), it's purely newlines
+        const isOnlyNewlines = Math.abs(netChars) === Math.abs(netNewlines) || 
+                               Math.abs(netChars) === Math.abs(netNewlines * 2); // for \r\n
+        
+        if (isOnlyNewlines && netNewlines !== 0) {
+            const newlinePart = netNewlines > 0 ? 
+                `+${netNewlines} newline${netNewlines !== 1 ? 's' : ''}` : 
+                `-${Math.abs(netNewlines)} newline${Math.abs(netNewlines) !== 1 ? 's' : ''}`;
+            if (summary) {
+                summary += `, ${newlinePart}`;
+            } else {
+                summary = newlinePart;
+            }
         } else {
-            summary = charPart;
+            const charPart = netChars > 0 ? `+${netChars} chars` : `-${Math.abs(netChars)} chars`;
+            if (summary) {
+                summary += `, ${charPart}`;
+            } else {
+                summary = charPart;
+            }
         }
     }
     
