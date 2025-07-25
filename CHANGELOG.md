@@ -4,15 +4,29 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [0.3.0] - 2025-01-15
+## [0.3.0] - 2025-01-25
 
 ### Enhanced
-- **New Reset Icon**: Updated reset button to use cleaning sponge emoji (🧽) for better visual representation
-- **Major Version Milestone**: Bumped to 0.3.0 to reflect the significant feature additions and stability improvements
+- **Improved Text Formatting**: Implemented middle ellipsis display for long text content
+  - Shows first 37 characters, then "...", then last 37 characters for better readability
+  - Unified text formatting across all node displays and diff summaries
+- **Smart Diff Summaries**: Enhanced diff summary logic for better change reporting
+  - Shows net changes instead of separate additions/deletions (e.g., "+2 lines, +50 chars" instead of "+3 lines -1 lines")
+  - Detects pure newline changes and displays as "+1 newline" instead of "+1 chars"
+  - Distinguishes between content changes and whitespace-only changes
+  - Proper handling of both Unix (\n) and Windows (\r\n) line endings
+- **Reset Button Icon**: Updated reset button to use cleaning sponge emoji (🧽) for better visual representation
+
+### Fixed
+- **Function Conflicts**: Resolved conflicts between generateDiffSummary and formatTextForNodeDisplay functions
+- **Duplicate Ellipsis**: Fixed issue where ellipsis ("...") appeared multiple times in text formatting
+- **Character Counting**: Improved accuracy of character and whitespace counting in diff analysis
 
 ### Technical Details
-- Changed reset button emoji from 🗑️ to 🧽 to better represent the "clean slate" functionality
-- This version represents a stable milestone with toolbar functionality, theme integration, and action-based grouping
+- Consolidated text formatting logic into unified functions
+- Enhanced generateDiffSummary with intelligent change detection
+- Better handling of edge cases in text content analysis
+- Improved middle ellipsis formatting for multi-line content display
 
 ## [0.2.12] - 2025-01-15
 
