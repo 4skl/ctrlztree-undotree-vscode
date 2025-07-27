@@ -319,6 +319,30 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }        outputChannel.appendLine('CtrlZTree: Initializing data structures.');
 
+        // Helper function to check if a webview panel is still valid and not disposed
+        function isPanelValid(panel: vscode.WebviewPanel): boolean {
+            try {
+                // Try to access a property - if panel is disposed, this will throw
+                return panel.visible !== undefined && panel.webview !== undefined;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        // Helper function to safely post message to webview
+        function safePostMessage(panel: vscode.WebviewPanel, message: any): boolean {
+            try {
+                if (isPanelValid(panel)) {
+                    panel.webview.postMessage(message);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                outputChannel.appendLine(`CtrlZTree: Error posting message to webview: ${error}`);
+                return false;
+            }
+        }
+
         // Unified function to format any text content for node display
         function formatTextForNodeDisplay(text: string): string {
             if (!text || text.trim() === '') {
@@ -365,6 +389,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Function to send updated tree data to the webview
         function postUpdatesToWebview(panel: vscode.WebviewPanel, tree: CtrlZTree, documentUriString: string) {
+            if (!isPanelValid(panel)) {
+                outputChannel.appendLine(`CtrlZTree: Skipping update to disposed webview for ${documentUriString}`);
+                return;
+            }
+
             const nodes = tree.getAllNodes();
             const nodesArrayForVis: any[] = [];
             const edgesArrayForVis: any[] = [];
@@ -399,13 +428,18 @@ export function activate(context: vscode.ExtensionContext) {
 
             panelToFullHashMap.set(panel, currentFullHashMap); // Keep panel's hash map updated
 
-            panel.webview.postMessage({
+            const success = safePostMessage(panel, {
                 command: 'updateTree',
                 nodes: nodesArrayForVis,
                 edges: edgesArrayForVis,
                 headShortHash: currentHeadShortHash
             });
-            outputChannel.appendLine(`CtrlZTree: Posted updates to webview for ${documentUriString}`);
+
+            if (success) {
+                outputChannel.appendLine(`CtrlZTree: Posted updates to webview for ${documentUriString}`);
+            } else {
+                outputChannel.appendLine(`CtrlZTree: Failed to post updates to webview for ${documentUriString} - panel may be disposed`);
+            }
         }
         
         function getOrCreateTree(document: vscode.TextDocument): CtrlZTree {
@@ -811,13 +845,17 @@ export function activate(context: vscode.ExtensionContext) {
             if (!fileName || fileName.trim() === '') {
                 fileName = 'Untitled';
             }
-            if (existingPanel && typeof existingPanel.reveal === 'function') {
+            if (existingPanel && isPanelValid(existingPanel) && typeof existingPanel.reveal === 'function') {
                 existingPanel.title = `CtrlZTree ${fileName}`;
                 const tree = getOrCreateTree(documentToShow);
                 postUpdatesToWebview(existingPanel, tree, docUriString);
                 outputChannel.appendLine(`CtrlZTree: Updating and revealing existing panel for ${docUriString}`);
                 existingPanel.reveal(vscode.ViewColumn.Beside, false);
                 return; // Do NOT create a new panel
+            } else if (existingPanel && !isPanelValid(existingPanel)) {
+                // Clean up disposed panel
+                outputChannel.appendLine(`CtrlZTree: Removing disposed panel for ${docUriString}`);
+                activeVisualizationPanels.delete(docUriString);
             }
             
             outputChannel.appendLine(`CtrlZTree: Creating new visualization panel for ${docUriString}`);
@@ -1232,9 +1270,16 @@ export function activate(context: vscode.ExtensionContext) {
         const themeChangeSubscription = vscode.window.onDidChangeActiveColorTheme(() => {
             outputChannel.appendLine('CtrlZTree: Color theme changed, updating webviews...');
             // Notify all active webviews about theme change
-            for (const panel of activeVisualizationPanels.values()) {
-                if (panel.visible) {
-                    panel.webview.postMessage({ command: 'updateTheme' });
+            for (const [docUri, panel] of activeVisualizationPanels.entries()) {
+                if (isPanelValid(panel) && panel.visible) {
+                    const success = safePostMessage(panel, { command: 'updateTheme' });
+                    if (!success) {
+                        outputChannel.appendLine(`CtrlZTree: Removing disposed panel for ${docUri}`);
+                        activeVisualizationPanels.delete(docUri);
+                    }
+                } else if (!isPanelValid(panel)) {
+                    outputChannel.appendLine(`CtrlZTree: Removing disposed panel for ${docUri} during theme change`);
+                    activeVisualizationPanels.delete(docUri);
                 }
             }
         });
@@ -1251,7 +1296,7 @@ export function activate(context: vscode.ExtensionContext) {
             
             // Check if there's already an active panel
             const existingPanel = activeVisualizationPanels.get(docUriString);
-            if (existingPanel && typeof existingPanel.reveal === 'function') {
+            if (existingPanel && isPanelValid(existingPanel) && typeof existingPanel.reveal === 'function') {
                 // If there's already a panel for this document, just reveal it
                 outputChannel.appendLine(`CtrlZTree: Revealing existing panel for ${docUriString}`);
                 let fileName = editor.document.uri.path.split(/[\\/]/).pop() || 'Untitled';
@@ -1263,9 +1308,15 @@ export function activate(context: vscode.ExtensionContext) {
                 postUpdatesToWebview(existingPanel, tree, docUriString);
                 existingPanel.reveal(vscode.ViewColumn.Beside, false);
             } else {
+                // Clean up invalid panel if it exists
+                if (existingPanel && !isPanelValid(existingPanel)) {
+                    outputChannel.appendLine(`CtrlZTree: Removing disposed panel for ${docUriString}`);
+                    activeVisualizationPanels.delete(docUriString);
+                }
+                
                 // Check if any other panel is currently active and update it to show this document's tree
                 for (const [otherDocUri, panel] of activeVisualizationPanels.entries()) {
-                    if (panel.visible && typeof panel.reveal === 'function') {
+                    if (isPanelValid(panel) && panel.visible && typeof panel.reveal === 'function') {
                         outputChannel.appendLine(`CtrlZTree: Updating visible panel to show tree for ${docUriString}`);
                         let fileName = editor.document.uri.path.split(/[\\/]/).pop() || 'Untitled';
                         if (!fileName || fileName.trim() === '') {
@@ -1279,6 +1330,10 @@ export function activate(context: vscode.ExtensionContext) {
                         activeVisualizationPanels.delete(otherDocUri);
                         activeVisualizationPanels.set(docUriString, panel);
                         break;
+                    } else if (!isPanelValid(panel)) {
+                        // Clean up disposed panels
+                        outputChannel.appendLine(`CtrlZTree: Removing disposed panel for ${otherDocUri}`);
+                        activeVisualizationPanels.delete(otherDocUri);
                     }
                 }
             }

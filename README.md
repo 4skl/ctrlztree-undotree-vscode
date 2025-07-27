@@ -117,7 +117,16 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.3.4 (Current)
+### 0.3.5 (Current)
+
+**Webview Stability & Error Handling:**
+- ✅ **Fixed Webview Disposal Error**: Resolved "Webview is disposed" error that occurred when interacting with closed panels
+- ✅ **Enhanced Panel Management**: Added proper panel validity checks before webview operations
+- ✅ **Improved Error Handling**: Safe message posting with automatic cleanup of disposed panels
+- ✅ **Better Stability**: More robust webview lifecycle management with enhanced error logging
+- ✅ **Automatic Cleanup**: Disposed panels are automatically removed from tracking maps
+
+### 0.3.4
 
 **Dynamic Tree View & Multi-Document Support:**
 - ✅ **Dynamic Tree View**: Tree view now automatically adapts when switching between editor tabs

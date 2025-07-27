@@ -2,6 +2,29 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.3.5] - 2025-07-27
+
+### Fixed
+- **Webview Disposal Error**: Fixed "Webview is disposed" error that occurred when trying to interact with closed panels
+  - Added proper panel validity checks before webview operations
+  - Implemented safe message posting with error handling
+  - Automatic cleanup of disposed panels from tracking maps
+  - Enhanced error logging for better debugging
+
+### Enhanced
+- **Improved Panel Management**: Better handling of disposed webview panels
+  - Safe webview interaction with validity checks
+  - Automatic removal of invalid panels during operations
+  - More robust error handling for webview operations
+  - Better logging for panel lifecycle events
+
+### Technical Details
+- Added `isPanelValid()` helper function to check panel disposal status
+- Added `safePostMessage()` helper function for safe webview communication
+- Updated all webview interactions to use safe methods
+- Enhanced disposal cleanup in theme changes and editor switches
+- Improved error handling with try-catch blocks around webview operations
+
 ## [0.3.4] - 2025-07-27
 
 ### Added
