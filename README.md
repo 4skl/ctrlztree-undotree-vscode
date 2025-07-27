@@ -18,7 +18,9 @@ CtrlZTree brings tree-based undo/redo functionality to VS Code, inspired by the 
 
 ### 📊 Interactive Visualization
 - **Real-time Updates**: Tree view updates automatically as you edit
+- **Dynamic Editor Switching**: Tree view automatically adapts when switching between different editor tabs/files
 - **File-specific Trees**: Each open file maintains its own history tree
+- **Seamless Multi-Document Support**: Single panel intelligently shows the history for whichever file is currently active
 - **Visual Indicators**: Current position highlighted in red, other states in blue
 - **Enhanced Tooltips**: Hover over nodes to see concise diff previews showing only changed lines
 - **Smart Content Display**: Tooltips show git-style diffs with intelligent truncation for large changes
@@ -57,11 +59,13 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 ### Visualization Panel
 1. Run the **"CtrlZTree: Visualize History Tree"** command
 2. A new panel opens showing your edit history as an interactive graph
-3. **Current state** is prominently displayed at the top level with enhanced styling (larger, bold text and thicker border)
-4. **Other states** appear in blue with standard styling
-5. **Click any node** to instantly navigate to that document state
-6. **Hover over nodes** to see enhanced tooltips with concise change previews
-7. **Panel title** shows "CtrlZTree \<filename\>" for easy identification
+3. **Dynamic Updates**: Panel automatically switches to show the history tree of whichever file you're currently editing
+4. **Current state** is prominently displayed at the top level with enhanced styling (larger, bold text and thicker border)
+5. **Other states** appear in blue with standard styling
+6. **Click any node** to instantly navigate to that document state
+7. **Hover over nodes** to see enhanced tooltips with concise change previews
+8. **Panel title** updates automatically to show "CtrlZTree \<filename\>" for the active file
+9. **Seamless switching**: Move between different files and the tree view follows automatically
 
 ### Enhanced Tooltips (v0.2.0)
 - **Git-style Diffs**: Tooltips show only the actual changed lines (+ and - lines)
@@ -113,7 +117,25 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.3.2 (Current)
+### 0.3.4 (Current)
+
+**Dynamic Tree View & Multi-Document Support:**
+- ✅ **Dynamic Tree View**: Tree view now automatically adapts when switching between editor tabs
+- ✅ **Real-time Editor Switching**: Tree view updates automatically when user changes active editor
+- ✅ **Seamless Multi-File Support**: Single tree view panel shows history for currently focused file
+- ✅ **Enhanced Panel Management**: Reuses existing panels instead of creating multiple windows
+- ✅ **Better Resource Usage**: Reduced memory usage with intelligent panel reuse
+
+### 0.3.3
+
+**Critical Production Fixes & Tree Layout:**
+- ✅ **Fixed Tree Orientation**: Resolved horizontal tree layout issue by removing explicit level assignments
+- ✅ **Production Deployment Fixed**: Replaced remote CDN with locally bundled vis-network library
+- ✅ **Enhanced Current Node Visibility**: Improved visual styling with larger font, thicker border, and shadow effects
+- ✅ **Offline Functionality**: All required libraries now bundled locally within extension
+- ✅ **Better Resource Management**: Updated Content Security Policy to work with local resources only
+
+### 0.3.2
 
 **Documentation & Maintenance Update:**
 - ✅ **Updated Documentation**: Comprehensive README update to reflect all features from 0.3.1 and 0.3.0

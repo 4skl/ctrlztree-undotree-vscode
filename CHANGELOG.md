@@ -2,6 +2,28 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.3.4] - 2025-07-27
+
+### Added
+- **Dynamic Tree View**: Tree view now automatically adapts when switching between editor tabs
+  - Tree view updates in real-time when user changes active editor
+  - Automatically shows history tree for the currently focused file
+  - Seamless switching between different files' undo/redo histories
+  - Existing panels are reused and updated instead of creating multiple panels
+
+### Enhanced
+- **Improved Multi-Document Support**: Better handling of multiple open files
+  - Single tree view panel that dynamically shows the appropriate history
+  - Panel title updates to reflect the current file name
+  - Reduced memory usage by reusing webview panels
+  - Better user experience when working with multiple files simultaneously
+
+### Technical Details
+- Added `onDidChangeActiveTextEditor` event listener for active editor change detection
+- Enhanced panel management to reuse existing webview panels for different documents
+- Improved panel title updating to reflect current active file
+- Added intelligent panel mapping and cleanup for better resource management
+
 ## [0.3.3] - 2025-07-27
 
 ### Fixed

@@ -1239,6 +1239,51 @@ export function activate(context: vscode.ExtensionContext) {
             }
         });
         
+        // Listen for active editor changes to update tree view
+        const activeEditorChangeSubscription = vscode.window.onDidChangeActiveTextEditor((editor) => {
+            if (!editor) {
+                outputChannel.appendLine('CtrlZTree: Active editor changed to none.');
+                return;
+            }
+            
+            const docUriString = editor.document.uri.toString();
+            outputChannel.appendLine(`CtrlZTree: Active editor changed to ${docUriString}`);
+            
+            // Check if there's already an active panel
+            const existingPanel = activeVisualizationPanels.get(docUriString);
+            if (existingPanel && typeof existingPanel.reveal === 'function') {
+                // If there's already a panel for this document, just reveal it
+                outputChannel.appendLine(`CtrlZTree: Revealing existing panel for ${docUriString}`);
+                let fileName = editor.document.uri.path.split(/[\\/]/).pop() || 'Untitled';
+                if (!fileName || fileName.trim() === '') {
+                    fileName = 'Untitled';
+                }
+                existingPanel.title = `CtrlZTree ${fileName}`;
+                const tree = getOrCreateTree(editor.document);
+                postUpdatesToWebview(existingPanel, tree, docUriString);
+                existingPanel.reveal(vscode.ViewColumn.Beside, false);
+            } else {
+                // Check if any other panel is currently active and update it to show this document's tree
+                for (const [otherDocUri, panel] of activeVisualizationPanels.entries()) {
+                    if (panel.visible && typeof panel.reveal === 'function') {
+                        outputChannel.appendLine(`CtrlZTree: Updating visible panel to show tree for ${docUriString}`);
+                        let fileName = editor.document.uri.path.split(/[\\/]/).pop() || 'Untitled';
+                        if (!fileName || fileName.trim() === '') {
+                            fileName = 'Untitled';
+                        }
+                        panel.title = `CtrlZTree ${fileName}`;
+                        const tree = getOrCreateTree(editor.document);
+                        postUpdatesToWebview(panel, tree, docUriString);
+                        
+                        // Update the mapping to point to the new document
+                        activeVisualizationPanels.delete(otherDocUri);
+                        activeVisualizationPanels.set(docUriString, panel);
+                        break;
+                    }
+                }
+            }
+        });
+        
         outputChannel.appendLine('CtrlZTree: Registering undo command...');
         const undoCommand = vscode.commands.registerCommand('ctrlztree.undo', async () => {
             outputChannel.appendLine('CtrlZTree: undo command invoked.');
@@ -1437,7 +1482,7 @@ export function activate(context: vscode.ExtensionContext) {
         });
         outputChannel.appendLine('CtrlZTree: visualize command registered.');
 
-        context.subscriptions.push(changeDocumentSubscription, themeChangeSubscription, undoCommand, redoCommand, visualizeCommand);
+        context.subscriptions.push(changeDocumentSubscription, themeChangeSubscription, activeEditorChangeSubscription, undoCommand, redoCommand, visualizeCommand);
         outputChannel.appendLine('CtrlZTree: All commands and subscriptions pushed.');
 
         outputChannel.appendLine('CtrlZTree: Extension activation completed successfully.');
