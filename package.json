@@ -1,14 +1,16 @@
 {
   "name": "ctrlztree",
-  "displayName": "CtrlZTree",  "description": "History of modifications in the form of a tree instead of a stack, like in the Undotree plugin.",
+  "displayName": "CtrlZTree",
+  "description": "History of modifications in the form of a tree instead of a stack, like in the Undotree plugin.",
   "keywords": [
     "vscode",
     "extension",
     "undotree",
     "history",
     "tree",
-    "ctrlz"  ],
-  "version": "0.3.2",
+    "ctrlz"
+  ],
+  "version": "0.3.3",
   "publisher": "4skl",
   "icon": "icon.png",
   "repository": {
@@ -22,7 +24,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:ctrlztree.visualize",
+    "onLanguage:*"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -79,5 +83,8 @@
     "mocha": "^11.5.0",
     "typescript": "^4.3.2",
     "vscode-test": "^1.5.2"
+  },
+  "dependencies": {
+    "vis-network": "^10.0.1"
   }
 }

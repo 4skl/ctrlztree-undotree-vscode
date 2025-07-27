@@ -419,7 +419,12 @@ export function activate(context: vscode.ExtensionContext) {
         }
         outputChannel.appendLine('CtrlZTree: getOrCreateTree function defined.');
 
-        function getWebviewContent(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null, cspSource: string, fileName: string): string {
+        function getWebviewContent(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null, webview: vscode.Webview, fileName: string): string {
+            // Get the local vis-network resource URI
+            const visNetworkUri = webview.asWebviewUri(vscode.Uri.joinPath(
+                context.extensionUri, 'resources', 'vis-network.min.js'
+            ));
+            
             return `
             <!DOCTYPE html>
             <html>
@@ -427,13 +432,12 @@ export function activate(context: vscode.ExtensionContext) {
                 <meta charset="UTF-8">
                 <meta http-equiv="Content-Security-Policy" 
                       content="default-src 'none'; 
-                               script-src ${cspSource} 'unsafe-inline' https://unpkg.com; 
-                               style-src ${cspSource} 'unsafe-inline' https://unpkg.com data:; 
-                               font-src ${cspSource} https://unpkg.com data:; 
-                               img-src ${cspSource} data: https:; 
-                               connect-src ${cspSource};">
+                               script-src ${webview.cspSource} 'unsafe-inline'; 
+                               style-src ${webview.cspSource} 'unsafe-inline'; 
+                               font-src ${webview.cspSource}; 
+                               img-src ${webview.cspSource} data:;">
                 <title>CtrlZTree ${fileName}</title>
-                <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+                <script src="${visNetworkUri}"></script>
                 <style>
                     :root {
                         /* VS Code theme-aware colors */
@@ -597,12 +601,12 @@ export function activate(context: vscode.ExtensionContext) {
                                 },
                                 font: {
                                     color: foregroundColor,
-                                    size: isHead ? 14 : 12, // Make current node text larger
+                                    size: isHead ? 16 : 12, // Make current node text larger
                                     bold: isHead ? true : false // Make current node text bold
                                 },
-                                // Position current node above others in hierarchy
-                                level: isHead ? 0 : undefined,
-                                borderWidth: isHead ? 3 : 2 // Make current node border thicker
+                                // Remove explicit level assignment to preserve tree structure
+                                borderWidth: isHead ? 4 : 2, // Make current node border much thicker
+                                shadow: isHead ? {enabled: true, color: currentColor, size: 8} : false // Add glow to current node
                             };
                         });
 
@@ -753,8 +757,12 @@ export function activate(context: vscode.ExtensionContext) {
                                             },
                                             font: {
                                                 color: foregroundColor,
-                                                size: 12
-                                            }
+                                                size: isHead ? 16 : 12, // Make current node text larger
+                                                bold: isHead ? true : false // Make current node text bold
+                                            },
+                                            // Remove explicit level assignment to preserve tree structure
+                                            borderWidth: isHead ? 4 : 2, // Make current node border much thicker
+                                            shadow: isHead ? {enabled: true, color: currentColor, size: 8} : false // Add glow to current node
                                         };
                                     });
                                     
@@ -826,7 +834,7 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.ViewColumn.Beside,
                 { 
                     enableScripts: true,
-                    localResourceRoots: [],
+                    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'resources')],
                     retainContextWhenHidden: true
                 }
             );
@@ -864,7 +872,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
             panelToFullHashMap.set(panel, initialFullHashMap);
             
-            panel.webview.html = getWebviewContent(nodesArrayForVis, edgesArrayForVis, currentHeadShortHash, panel.webview.cspSource, fileNameForPanel);
+            panel.webview.html = getWebviewContent(nodesArrayForVis, edgesArrayForVis, currentHeadShortHash, panel.webview, fileNameForPanel);
             outputChannel.appendLine(`CtrlZTree: New panel created and HTML set for ${docUriString}`);
     
             panel.onDidChangeViewState(

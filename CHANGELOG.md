@@ -2,6 +2,35 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.3.3] - 2025-07-27
+
+### Fixed
+- **Tree Orientation**: Fixed horizontal tree layout issue by removing explicit level assignments that were interfering with natural tree hierarchy
+  - Removed forced level positioning that was causing all non-current nodes to appear on same level
+  - Tree now displays vertically as intended while maintaining current node prominence
+- **Production Deployment**: Fixed critical issue where extension didn't work in production due to CDN dependency
+  - Replaced remote vis-network CDN with locally bundled library
+  - Added vis-network as local dependency and included in extension package
+  - Updated Content Security Policy to work with local resources only
+- **Current Node Visibility**: Enhanced current node prominence with improved visual styling
+  - Increased font size from 14 to 16 for current node
+  - Enhanced border thickness from 3 to 4 pixels
+  - Added shadow/glow effect to current node for better visibility
+
+### Enhanced
+- **Resource Management**: Improved extension resource handling for better offline functionality
+  - All required libraries now bundled locally within extension
+  - No external network dependencies required for core functionality
+- **Build Configuration**: Updated TypeScript configuration to include DOM types for better library compatibility
+
+### Technical Details
+- Bundled vis-network.min.js locally in resources folder
+- Updated webview creation to include local resource roots
+- Modified getWebviewContent to use webview.asWebviewUri for local resources
+- Enhanced tsconfig.json with DOM lib for proper type support
+- Removed explicit level assignments that were breaking tree hierarchy
+- Enhanced current node styling with shadow effects and larger border
+
 ## [0.3.2] - 2025-07-25
 
 ### Enhanced
