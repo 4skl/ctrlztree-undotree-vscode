@@ -558,6 +558,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                         height: 100vh;
                         border: 1px solid var(--vscode-border);
                         background-color: var(--vscode-background);
+                        position: relative;
                     }
                     
                     /* Ensure vis-network respects theme */
@@ -569,6 +570,33 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                     .vis-network:hover { 
                         cursor: pointer !important; 
                     }
+                    
+                    /* Floating diff button */
+                    #diff-button {
+                        position: absolute;
+                        display: none;
+                        background-color: var(--vscode-button-background, #0e639c);
+                        color: var(--vscode-button-foreground, #ffffff);
+                        border: 1px solid var(--vscode-button-border, #0e639c);
+                        border-radius: 3px;
+                        padding: 4px 12px;
+                        font-size: 11px;
+                        font-family: var(--vscode-font-family);
+                        cursor: pointer;
+                        white-space: nowrap;
+                        z-index: 1000;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+                        transition: background-color 0.15s ease;
+                    }
+                    
+                    #diff-button:hover {
+                        background-color: var(--vscode-button-hoverBackground, #1177bb);
+                    }
+                    
+                    #diff-button:active {
+                        background-color: var(--vscode-button-hoverBackground, #0d5a8f);
+                        transform: translateY(1px);
+                    }
                 </style>
             </head>
             <body>
@@ -577,6 +605,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                     <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
                 </div>
                 <div id="tree-visualization"></div>
+                <button id="diff-button">📊 View Diff</button>
                 <script>
                 try {
                     console.log('CtrlZTree Webview: Script tag started. Initializing...'); // New very early log
@@ -644,10 +673,8 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                         const colorUpdates = allNodeIds.map(nodeId => {
                             const isHead = nodeId === currentHeadNodeId;
                             const nodeObj = nodes.get(nodeId) || {};
-                            // Build label: include a visual "button" only for the current head node and only if it has a parent
-                            const label = (isHead && nodeObj.hasParent)
-                                ? (nodeObj.baseLabel + '\\n\\n┌─────────────┐\\n│📊 View Diff│\\n└─────────────┘')
-                                : nodeObj.baseLabel;
+                            // Use the base label without adding text-based button
+                            const label = nodeObj.baseLabel;
 
                             return {
                                 id: nodeId,
@@ -745,38 +772,68 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                             };
                             network = new vis.Network(container, data, options);
 
-                            // The diff "button" is now rendered only for the current active (head) node.
-                            // Label updates above include the visual button for the head; selection no longer toggles the button.
+                            // Get reference to the floating diff button
+                            const diffButton = document.getElementById('diff-button');
+                            
+                            // Function to update diff button position and visibility
+                            function updateDiffButton() {
+                                if (!diffButton || !currentHeadNodeId) {
+                                    if (diffButton) diffButton.style.display = 'none';
+                                    return;
+                                }
+                                
+                                const headNodeData = nodes.get(currentHeadNodeId);
+                                if (!headNodeData || !headNodeData.hasParent) {
+                                    diffButton.style.display = 'none';
+                                    return;
+                                }
+                                
+                                try {
+                                    // Get node position in DOM coordinates
+                                    const nodePosition = network.getPositions([currentHeadNodeId])[currentHeadNodeId];
+                                    const domPosition = network.canvasToDOM({x: nodePosition.x, y: nodePosition.y});
+                                    const boundingBox = network.getBoundingBox(currentHeadNodeId);
+                                    const domBoundingBox = {
+                                        bottom: network.canvasToDOM({x: 0, y: boundingBox.bottom}).y
+                                    };
+                                    
+                                    // Position button at bottom center of the head node
+                                    diffButton.style.left = (domPosition.x - diffButton.offsetWidth / 2) + 'px';
+                                    diffButton.style.top = (domBoundingBox.bottom + 5) + 'px';
+                                    diffButton.style.display = 'block';
+                                } catch (e) {
+                                    console.error('CtrlZTree Webview: Error positioning diff button:', e);
+                                    diffButton.style.display = 'none';
+                                }
+                            }
+                            
+                            // Setup diff button click handler
+                            if (diffButton) {
+                                diffButton.addEventListener('click', () => {
+                                    console.log('CtrlZTree Webview: Diff button clicked for head:', currentHeadNodeId);
+                                    if (currentHeadNodeId) {
+                                        vscode.postMessage({
+                                            command: 'openDiff',
+                                            shortHash: currentHeadNodeId
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            // Update button position after network stabilizes and on viewport changes
+                            network.on('stabilized', updateDiffButton);
+                            network.on('zoom', updateDiffButton);
+                            network.on('dragEnd', updateDiffButton);
+                            
+                            // Initial button update
+                            setTimeout(updateDiffButton, 100);
 
                             network.on("click", function (params) {
                                 if (params.nodes.length > 0) {
                                     const clickedNodeId = params.nodes[0];
                                     const nodeData = nodes.get(clickedNodeId);
                                     
-                                    // Check if click was on the diff button (bottom area of the current head node)
-                                    if (clickedNodeId === currentHeadNodeId && nodeData && nodeData.hasParent) {
-                                        try {
-                                            const boundingBox = network.getBoundingBox(clickedNodeId);
-                                            const canvasPos = params.pointer.canvas;
-                                            
-                                            // Calculate relative Y position within node
-                                            const relativeY = (canvasPos.y - boundingBox.top) / (boundingBox.bottom - boundingBox.top);
-                                            
-                                            // Bottom 25% is the button area
-                                            if (relativeY > 0.75) {
-                                                console.log('CtrlZTree Webview: Diff button clicked for:', clickedNodeId);
-                                                vscode.postMessage({
-                                                    command: 'openDiff',
-                                                    shortHash: clickedNodeId
-                                                });
-                                                return;
-                                            }
-                                        } catch (e) {
-                                            console.error('CtrlZTree Webview: Error checking click position:', e);
-                                        }
-                                    }
-                                    
-                                    // Regular node navigation
+                                    // Regular node navigation (diff button has its own click handler now)
                                     console.log('CtrlZTree Webview: Node clicked:', clickedNodeId);
                                     vscode.postMessage({
                                         command: 'navigateToNode',
@@ -803,6 +860,34 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                             });
                         } else {
                             console.log('CtrlZTree Webview: Network already exists. DataSets updated and colors reapplied.');
+                            // Update diff button when tree updates
+                            setTimeout(() => {
+                                const diffButton = document.getElementById('diff-button');
+                                if (diffButton && !currentHeadNodeId) {
+                                    diffButton.style.display = 'none';
+                                } else if (diffButton && currentHeadNodeId) {
+                                    const headNodeData = nodes.get(currentHeadNodeId);
+                                    if (!headNodeData || !headNodeData.hasParent) {
+                                        diffButton.style.display = 'none';
+                                    } else {
+                                        try {
+                                            const nodePosition = network.getPositions([currentHeadNodeId])[currentHeadNodeId];
+                                            const domPosition = network.canvasToDOM({x: nodePosition.x, y: nodePosition.y});
+                                            const boundingBox = network.getBoundingBox(currentHeadNodeId);
+                                            const domBoundingBox = {
+                                                bottom: network.canvasToDOM({x: 0, y: boundingBox.bottom}).y
+                                            };
+                                            
+                                            diffButton.style.left = (domPosition.x - diffButton.offsetWidth / 2) + 'px';
+                                            diffButton.style.top = (domBoundingBox.bottom + 5) + 'px';
+                                            diffButton.style.display = 'block';
+                                        } catch (e) {
+                                            console.error('CtrlZTree Webview: Error updating diff button position:', e);
+                                            diffButton.style.display = 'none';
+                                        }
+                                    }
+                                }
+                            }, 100);
                         }
                     }
 
