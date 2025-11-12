@@ -5,10 +5,10 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 ## [0.4.0] - 2025-11-12
 
 ### Added
-- **Diff View Integration**: Integrated action buttons appear when selecting nodes with parents
-  - Click any node to select it and reveal action buttons
-  - "📊 View Diff" button appears below selected nodes that have a parent
-  - Click the diff button to open a side-by-side diff view
+- **Diff View Integration**: Integrated diff indicator appears directly in selected nodes
+  - Click any node to select it - nodes with parents show a diff indicator in their label
+  - Selected nodes display "[📊 Click here for diff]" text directly in the node
+  - Click the bottom area of a selected node to open a side-by-side diff view
   - Diff view shows changes between parent node and selected node
   - Uses VS Code's native diff viewer with syntax highlighting
   - Diff view opens beside the graph view (not replacing it)
@@ -18,21 +18,23 @@ All notable changes to the "ctrlztree" extension will be documented in this file
   - Prevents bugs from tracking internal VS Code views
 
 ### Enhanced
-- **Improved Node Interaction**: Cleaner interface with selection-based action buttons
-- **Better User Experience**: Diff button integrated with selected node, positioned below it
+- **Improved Node Interaction**: Cleaner interface with diff indicator integrated directly in node label
+- **Better User Experience**: No floating elements - diff option appears as part of the selected node
 - **Smart View Management**: Diff opens in a separate column, preserving the tree visualization
 - **Enhanced Tooltips**: Tooltips mention diff functionality for nodes with parents
-- **Stable Button Positioning**: Action buttons follow node position during zoom, pan, and drag operations
+- **Automatic Positioning**: Diff indicator is part of the node - no manual position calculations needed
+- **Responsive Design**: Node labels dynamically update on selection/deselection
 
 ### Technical Details
 - Added `ctrlztree-diff` URI scheme for virtual diff documents
 - Implemented `TextDocumentContentProvider` for diff content
 - Selection-based UI with `selectNode` and `deselectNode` event handlers
-- Action button positioned using vis-network's bounding box and coordinate transformation
+- Dynamic node label updates to show/hide diff indicator
+- Click area detection using bounding box for diff activation (bottom 30% of selected node)
 - Added document scheme filtering for read-only documents
 - Track last valid editor URI to maintain tree view when switching to read-only documents
 - Diff view opens with `ViewColumn.Beside` to avoid replacing graph panel
-- Button position updates on network stabilization, zoom, and drag events
+- Stores base label for each node to enable clean label restoration
 - Skips tracking for common read-only schemes: vscode, output, debug, git, search-editor
 - Diff view opens with `ViewColumn.Beside` to avoid replacing graph panel
 

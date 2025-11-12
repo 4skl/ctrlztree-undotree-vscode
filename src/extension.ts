@@ -426,14 +426,16 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                 // Format timestamp as "time since now"
                 const timeAgo = formatTimeAgo(node.timestamp);
                 
-                // Don't show diff indicator in label - will be shown dynamically on hover/selection
+                // Store whether node has parent for later use
                 const hasParent = node.parent !== null;
                 
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
-                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}${hasParent ? '\n\nClick bottom area to view diff with parent' : ''}`,
-                    hasParent: hasParent  // Store this for later use
+                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}${hasParent ? '\n\nSelect node and click the button to view diff' : ''}`,
+                    hasParent: hasParent,
+                    // Store base label for later use when updating
+                    baseLabel: `${timeAgo}\n${shortHash}\n${addedTextPreview}`
                 });
                 
                 if (node.parent) {
@@ -567,45 +569,6 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                     .vis-network:hover { 
                         cursor: pointer !important; 
                     }
-                    
-                    /* Selected node diff button overlay */
-                    #node-actions {
-                        position: fixed;
-                        display: none;
-                        z-index: 1000;
-                        pointer-events: none;
-                    }
-                    
-                    #node-actions.visible {
-                        display: block;
-                    }
-                    
-                    .node-action-btn {
-                        background: var(--vscode-button-background, #0e639c);
-                        border: 1px solid var(--vscode-button-border, rgba(255, 255, 255, 0.3));
-                        color: var(--vscode-button-foreground, white);
-                        border-radius: 3px;
-                        padding: 3px 8px;
-                        font-size: 11px;
-                        cursor: pointer;
-                        font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
-                        pointer-events: auto;
-                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-                        transition: all 0.2s;
-                        display: inline-block;
-                        margin: 2px;
-                    }
-                    
-                    .node-action-btn:hover {
-                        background: var(--vscode-button-hoverBackground, #1177bb);
-                        transform: translateY(-1px);
-                        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
-                    }
-                    
-                    .node-action-btn:active {
-                        transform: translateY(0);
-                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-                    }
                 </style>
             </head>
             <body>
@@ -614,9 +577,6 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                     <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
                 </div>
                 <div id="tree-visualization"></div>
-                <div id="node-actions">
-                    <button id="diff-btn" class="node-action-btn" title="View diff with parent">📊 View Diff</button>
-                </div>
                 <script>
                 try {
                     console.log('CtrlZTree Webview: Script tag started. Initializing...'); // New very early log
@@ -683,8 +643,15 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
 
                         const colorUpdates = allNodeIds.map(nodeId => {
                             const isHead = nodeId === currentHeadNodeId;
+                            const nodeObj = nodes.get(nodeId) || {};
+                            // Build label: include a visual "button" only for the current head node and only if it has a parent
+                            const label = (isHead && nodeObj.hasParent)
+                                ? (nodeObj.baseLabel + '\\n\\n┌─────────────┐\\n│📊 View Diff│\\n└─────────────┘')
+                                : nodeObj.baseLabel;
+
                             return {
                                 id: nodeId,
+                                label: label,
                                 color: {
                                     background: isHead ? currentColor : accentColor,
                                     border: foregroundColor,
@@ -778,82 +745,36 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                             };
                             network = new vis.Network(container, data, options);
 
-                            // Get action elements
-                            const nodeActions = document.getElementById('node-actions');
-                            const diffBtn = document.getElementById('diff-btn');
-                            let selectedNodeId = null;
-                            
-                            // Handle diff button click
-                            if (diffBtn) {
-                                diffBtn.addEventListener('click', (e) => {
-                                    e.stopPropagation();
-                                    if (selectedNodeId) {
-                                        console.log('CtrlZTree Webview: Diff button clicked for:', selectedNodeId);
-                                        vscode.postMessage({
-                                            command: 'openDiff',
-                                            shortHash: selectedNodeId
-                                        });
-                                    }
-                                });
-                            }
-                            
-                            // Function to update action button position
-                            function updateActionButtonPosition(nodeId) {
-                                if (!nodeActions || !network) return;
-                                
-                                try {
-                                    const boundingBox = network.getBoundingBox(nodeId);
-                                    const canvasPos = network.canvasToDOM({
-                                        x: (boundingBox.left + boundingBox.right) / 2,
-                                        y: boundingBox.bottom
-                                    });
-                                    
-                                    // Position actions below the node, centered
-                                    nodeActions.style.left = (canvasPos.x - 50) + 'px'; // Center approximately
-                                    nodeActions.style.top = (canvasPos.y + 5) + 'px'; // Slightly below node
-                                } catch (e) {
-                                    console.error('CtrlZTree Webview: Error positioning action button:', e);
-                                }
-                            }
-                            
-                            // Function to show/hide action buttons
-                            function updateActionButtons(nodeId) {
-                                if (!nodeActions) return;
-                                
-                                if (nodeId) {
-                                    const nodeData = nodes.get(nodeId);
-                                    if (nodeData && nodeData.hasParent) {
-                                        selectedNodeId = nodeId;
-                                        updateActionButtonPosition(nodeId);
-                                        nodeActions.classList.add('visible');
-                                    } else {
-                                        nodeActions.classList.remove('visible');
-                                        selectedNodeId = null;
-                                    }
-                                } else {
-                                    nodeActions.classList.remove('visible');
-                                    selectedNodeId = null;
-                                }
-                            }
-
-                            // Handle node selection
-                            network.on("selectNode", function (params) {
-                                if (params.nodes.length > 0) {
-                                    const nodeId = params.nodes[0];
-                                    console.log('CtrlZTree Webview: Node selected:', nodeId);
-                                    updateActionButtons(nodeId);
-                                }
-                            });
-                            
-                            // Handle deselection
-                            network.on("deselectNode", function (params) {
-                                console.log('CtrlZTree Webview: Node deselected');
-                                updateActionButtons(null);
-                            });
+                            // The diff "button" is now rendered only for the current active (head) node.
+                            // Label updates above include the visual button for the head; selection no longer toggles the button.
 
                             network.on("click", function (params) {
                                 if (params.nodes.length > 0) {
                                     const clickedNodeId = params.nodes[0];
+                                    const nodeData = nodes.get(clickedNodeId);
+                                    
+                                    // Check if click was on the diff button (bottom area of the current head node)
+                                    if (clickedNodeId === currentHeadNodeId && nodeData && nodeData.hasParent) {
+                                        try {
+                                            const boundingBox = network.getBoundingBox(clickedNodeId);
+                                            const canvasPos = params.pointer.canvas;
+                                            
+                                            // Calculate relative Y position within node
+                                            const relativeY = (canvasPos.y - boundingBox.top) / (boundingBox.bottom - boundingBox.top);
+                                            
+                                            // Bottom 25% is the button area
+                                            if (relativeY > 0.75) {
+                                                console.log('CtrlZTree Webview: Diff button clicked for:', clickedNodeId);
+                                                vscode.postMessage({
+                                                    command: 'openDiff',
+                                                    shortHash: clickedNodeId
+                                                });
+                                                return;
+                                            }
+                                        } catch (e) {
+                                            console.error('CtrlZTree Webview: Error checking click position:', e);
+                                        }
+                                    }
                                     
                                     // Regular node navigation
                                     console.log('CtrlZTree Webview: Node clicked:', clickedNodeId);
@@ -878,25 +799,6 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                                 console.log('CtrlZTree Webview: blurNode event. Node ID:', params.node);
                                 if (network && network.canvas && network.canvas.body && network.canvas.body.container) {
                                     network.canvas.body.container.style.cursor = 'default';
-                                }
-                            });
-                            
-                            // Update button position when network is stabilized or zoomed
-                            network.on("stabilized", function() {
-                                if (selectedNodeId) {
-                                    updateActionButtonPosition(selectedNodeId);
-                                }
-                            });
-                            
-                            network.on("zoom", function() {
-                                if (selectedNodeId) {
-                                    updateActionButtonPosition(selectedNodeId);
-                                }
-                            });
-                            
-                            network.on("dragEnd", function() {
-                                if (selectedNodeId) {
-                                    updateActionButtonPosition(selectedNodeId);
                                 }
                             });
                         } else {

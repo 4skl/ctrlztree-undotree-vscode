@@ -24,8 +24,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:ctrlztree.visualize"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
