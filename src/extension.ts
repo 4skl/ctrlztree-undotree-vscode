@@ -230,6 +230,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
         let isApplyingEdit = false; 
         const processingDocuments = new Set<string>(); // Track documents currently being processed
         let lastValidEditorUri: string | null = null; // Track last non-read-only editor
+        let lastOpenedDiffEditor: vscode.TextEditor | null = null; // Track last opened diff editor to close it
         
         // Register text document content provider for diff views
         const diffContentProvider = new (class implements vscode.TextDocumentContentProvider {
@@ -432,7 +433,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
-                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}${hasParent ? '\n\nSelect node and click the button to view diff' : ''}`,
+                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`,
                     hasParent: hasParent,
                     // Store base label for later use when updating
                     baseLabel: `${timeAgo}\n${shortHash}\n${addedTextPreview}`
@@ -1107,9 +1108,23 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                                 const parentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${parentShortHash}?${encodeURIComponent(parentContent)}`);
                                 const currentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${shortHash}?${encodeURIComponent(currentContent)}`);
                                 
+                                // Close previously opened diff editor if it exists
+                                if (lastOpenedDiffEditor && !lastOpenedDiffEditor.document.isClosed) {
+                                    // Find the tab and close it
+                                    const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs);
+                                    const diffTab = tabs.find(tab => 
+                                        tab.input instanceof vscode.TabInputTextDiff &&
+                                        (tab.input.original.scheme === DIFF_SCHEME || tab.input.modified.scheme === DIFF_SCHEME)
+                                    );
+                                    if (diffTab) {
+                                        await vscode.window.tabGroups.close(diffTab);
+                                        outputChannel.appendLine(`CtrlZTree: Closed previous diff tab`);
+                                    }
+                                }
+                                
                                 // Open diff view in a new column beside the current one
                                 // This prevents the diff from replacing the graph view
-                                await vscode.commands.executeCommand(
+                                const diffEditor = await vscode.commands.executeCommand(
                                     'vscode.diff',
                                     parentUri,
                                     currentUri,
@@ -1119,6 +1134,15 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                                         preview: false
                                     }
                                 );
+                                
+                                // Store reference to the diff editor
+                                // Note: vscode.diff doesn't return the editor, so we find it
+                                const openedDiffEditor = vscode.window.visibleTextEditors.find(editor => 
+                                    editor.document.uri.scheme === DIFF_SCHEME
+                                );
+                                if (openedDiffEditor) {
+                                    lastOpenedDiffEditor = openedDiffEditor;
+                                }
                                 
                                 outputChannel.appendLine(`CtrlZTree: Diff view opened for ${shortHash}`);
                             } catch (e: any) {

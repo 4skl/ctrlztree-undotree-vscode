@@ -5,38 +5,46 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 ## [0.4.0] - 2025-11-12
 
 ### Added
-- **Diff View Integration**: Integrated diff indicator appears directly in selected nodes
-  - Click any node to select it - nodes with parents show a diff indicator in their label
-  - Selected nodes display "[📊 Click here for diff]" text directly in the node
-  - Click the bottom area of a selected node to open a side-by-side diff view
-  - Diff view shows changes between parent node and selected node
-  - Uses VS Code's native diff viewer with syntax highlighting
-  - Diff view opens beside the graph view (not replacing it)
+- **Floating Diff Button**: Styled HTML button appears on the current active node
+  - Button only shows on the current head node (active state)
+  - Professional button styling with VS Code theme colors, hover effects, and active states
+  - Positioned dynamically below the current node, following zoom/pan/drag operations
+  - Click the "📊 View Diff" button to open a side-by-side diff comparison
+  - Uses VS Code's native diff viewer with syntax highlighting and change indicators
+  - Parent-child comparison shows exactly what changed from parent to current node
+  - Virtual document URIs with `ctrlztree-diff` scheme for diff content
   - Diff documents are not tracked by the extension to prevent circular tracking issues
+- **Automatic Diff View Cleanup**: Prevents workspace clutter from multiple diff views
+  - Automatically closes the previous diff view before opening a new one
+  - Tracks last opened diff editor and cleans up its tab
+  - Only one diff view open at a time for better workspace management
 - **Read-Only Document Handling**: Read-only editors (like diff views) are now properly excluded from tracking
   - When a read-only document is active, the tree view shows the last valid editor's history
   - Prevents bugs from tracking internal VS Code views
 
 ### Enhanced
-- **Improved Node Interaction**: Cleaner interface with diff indicator integrated directly in node label
-- **Better User Experience**: No floating elements - diff option appears as part of the selected node
+- **Improved Node Interaction**: Clean floating button interface integrated with the visualization
+- **Better User Experience**: Styled button element with proper hover and active states
 - **Smart View Management**: Diff opens in a separate column, preserving the tree visualization
-- **Enhanced Tooltips**: Tooltips mention diff functionality for nodes with parents
-- **Automatic Positioning**: Diff indicator is part of the node - no manual position calculations needed
-- **Responsive Design**: Node labels dynamically update on selection/deselection
+- **Automatic Positioning**: Button repositions automatically on network stabilization, zoom, and drag events
+- **Theme Integration**: Button colors automatically adapt to VS Code's theme (light/dark)
+- **Workspace Cleanliness**: Automatic cleanup prevents accumulation of diff views
 
 ### Technical Details
 - Added `ctrlztree-diff` URI scheme for virtual diff documents
 - Implemented `TextDocumentContentProvider` for diff content
-- Selection-based UI with `selectNode` and `deselectNode` event handlers
-- Dynamic node label updates to show/hide diff indicator
-- Click area detection using bounding box for diff activation (bottom 30% of selected node)
+- Floating HTML button with absolute positioning using `canvasToDOM()` for coordinate conversion
+- Button appears/disappears based on current head node and parent availability
+- Position updates triggered by network events: stabilized, zoom, dragEnd
+- Click handler wired directly to button element (not node click detection)
+- Added `lastOpenedDiffEditor` tracking variable for diff view cleanup
+- Uses `vscode.window.tabGroups` API to find and close diff tabs
+- Tab detection via `TabInputTextDiff` interface matching diff scheme
 - Added document scheme filtering for read-only documents
 - Track last valid editor URI to maintain tree view when switching to read-only documents
 - Diff view opens with `ViewColumn.Beside` to avoid replacing graph panel
-- Stores base label for each node to enable clean label restoration
+- Button styled with CSS variables for theme-aware colors and transitions
 - Skips tracking for common read-only schemes: vscode, output, debug, git, search-editor
-- Diff view opens with `ViewColumn.Beside` to avoid replacing graph panel
 
 ## [0.3.5] - 2025-07-27
 
