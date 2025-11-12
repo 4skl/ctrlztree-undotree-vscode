@@ -210,14 +210,15 @@ class CtrlZTree {
     }
 }
 
-// Module-level variables for cleanup
+        // Module-level variables for cleanup
 let documentChangeTimeouts: Map<string, NodeJS.Timeout> = new Map();
 let pendingChanges: Map<string, string> = new Map();
 let lastChangeTime: Map<string, number> = new Map();
 let lastCursorPosition: Map<string, vscode.Position> = new Map();
 let lastChangeType: Map<string, 'typing' | 'deletion' | 'other'> = new Map();
 
-export function activate(context: vscode.ExtensionContext) {
+// Virtual document scheme for diff views - these should NOT be tracked
+const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.ExtensionContext) {
     let outputChannel: vscode.OutputChannel = vscode.window.createOutputChannel("CtrlZTree");
 
     try {
@@ -227,7 +228,19 @@ export function activate(context: vscode.ExtensionContext) {
         const activeVisualizationPanels = new Map<string, vscode.WebviewPanel>();
         const panelToFullHashMap = new Map<vscode.WebviewPanel, Map<string, string>>();
         let isApplyingEdit = false; 
-        const processingDocuments = new Set<string>(); // Track documents currently being processed 
+        const processingDocuments = new Set<string>(); // Track documents currently being processed
+        let lastValidEditorUri: string | null = null; // Track last non-read-only editor
+        
+        // Register text document content provider for diff views
+        const diffContentProvider = new (class implements vscode.TextDocumentContentProvider {
+            provideTextDocumentContent(uri: vscode.Uri): string {
+                // The content is encoded in the URI query
+                return uri.query;
+            }
+        })();
+        context.subscriptions.push(
+            vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, diffContentProvider)
+        ); 
         
         const ACTION_TIMEOUT = 500; // Shorter timeout for action boundaries
         const PAUSE_THRESHOLD = 1500; // If user pauses longer than this, create new action
@@ -413,11 +426,16 @@ export function activate(context: vscode.ExtensionContext) {
                 // Format timestamp as "time since now"
                 const timeAgo = formatTimeAgo(node.timestamp);
                 
+                // Don't show diff indicator in label - will be shown dynamically on hover/selection
+                const hasParent = node.parent !== null;
+                
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
-                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`
+                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}${hasParent ? '\n\nClick bottom area to view diff with parent' : ''}`,
+                    hasParent: hasParent  // Store this for later use
                 });
+                
                 if (node.parent) {
                     edgesArrayForVis.push({
                         from: node.parent.substring(0, 8),
@@ -549,6 +567,45 @@ export function activate(context: vscode.ExtensionContext) {
                     .vis-network:hover { 
                         cursor: pointer !important; 
                     }
+                    
+                    /* Selected node diff button overlay */
+                    #node-actions {
+                        position: fixed;
+                        display: none;
+                        z-index: 1000;
+                        pointer-events: none;
+                    }
+                    
+                    #node-actions.visible {
+                        display: block;
+                    }
+                    
+                    .node-action-btn {
+                        background: var(--vscode-button-background, #0e639c);
+                        border: 1px solid var(--vscode-button-border, rgba(255, 255, 255, 0.3));
+                        color: var(--vscode-button-foreground, white);
+                        border-radius: 3px;
+                        padding: 3px 8px;
+                        font-size: 11px;
+                        cursor: pointer;
+                        font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+                        pointer-events: auto;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+                        transition: all 0.2s;
+                        display: inline-block;
+                        margin: 2px;
+                    }
+                    
+                    .node-action-btn:hover {
+                        background: var(--vscode-button-hoverBackground, #1177bb);
+                        transform: translateY(-1px);
+                        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+                    }
+                    
+                    .node-action-btn:active {
+                        transform: translateY(0);
+                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+                    }
                 </style>
             </head>
             <body>
@@ -557,6 +614,9 @@ export function activate(context: vscode.ExtensionContext) {
                     <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
                 </div>
                 <div id="tree-visualization"></div>
+                <div id="node-actions">
+                    <button id="diff-btn" class="node-action-btn" title="View diff with parent">📊 View Diff</button>
+                </div>
                 <script>
                 try {
                     console.log('CtrlZTree Webview: Script tag started. Initializing...'); // New very early log
@@ -718,14 +778,92 @@ export function activate(context: vscode.ExtensionContext) {
                             };
                             network = new vis.Network(container, data, options);
 
+                            // Get action elements
+                            const nodeActions = document.getElementById('node-actions');
+                            const diffBtn = document.getElementById('diff-btn');
+                            let selectedNodeId = null;
+                            
+                            // Handle diff button click
+                            if (diffBtn) {
+                                diffBtn.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    if (selectedNodeId) {
+                                        console.log('CtrlZTree Webview: Diff button clicked for:', selectedNodeId);
+                                        vscode.postMessage({
+                                            command: 'openDiff',
+                                            shortHash: selectedNodeId
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            // Function to update action button position
+                            function updateActionButtonPosition(nodeId) {
+                                if (!nodeActions || !network) return;
+                                
+                                try {
+                                    const boundingBox = network.getBoundingBox(nodeId);
+                                    const canvasPos = network.canvasToDOM({
+                                        x: (boundingBox.left + boundingBox.right) / 2,
+                                        y: boundingBox.bottom
+                                    });
+                                    
+                                    // Position actions below the node, centered
+                                    nodeActions.style.left = (canvasPos.x - 50) + 'px'; // Center approximately
+                                    nodeActions.style.top = (canvasPos.y + 5) + 'px'; // Slightly below node
+                                } catch (e) {
+                                    console.error('CtrlZTree Webview: Error positioning action button:', e);
+                                }
+                            }
+                            
+                            // Function to show/hide action buttons
+                            function updateActionButtons(nodeId) {
+                                if (!nodeActions) return;
+                                
+                                if (nodeId) {
+                                    const nodeData = nodes.get(nodeId);
+                                    if (nodeData && nodeData.hasParent) {
+                                        selectedNodeId = nodeId;
+                                        updateActionButtonPosition(nodeId);
+                                        nodeActions.classList.add('visible');
+                                    } else {
+                                        nodeActions.classList.remove('visible');
+                                        selectedNodeId = null;
+                                    }
+                                } else {
+                                    nodeActions.classList.remove('visible');
+                                    selectedNodeId = null;
+                                }
+                            }
+
+                            // Handle node selection
+                            network.on("selectNode", function (params) {
+                                if (params.nodes.length > 0) {
+                                    const nodeId = params.nodes[0];
+                                    console.log('CtrlZTree Webview: Node selected:', nodeId);
+                                    updateActionButtons(nodeId);
+                                }
+                            });
+                            
+                            // Handle deselection
+                            network.on("deselectNode", function (params) {
+                                console.log('CtrlZTree Webview: Node deselected');
+                                updateActionButtons(null);
+                            });
+
                             network.on("click", function (params) {
                                 if (params.nodes.length > 0) {
                                     const clickedNodeId = params.nodes[0];
+                                    
+                                    // Regular node navigation
                                     console.log('CtrlZTree Webview: Node clicked:', clickedNodeId);
                                     vscode.postMessage({
                                         command: 'navigateToNode',
                                         shortHash: clickedNodeId
                                     });
+                                } else {
+                                    // Clicked on empty space, deselect
+                                    network.unselectAll();
                                 }
                             });
 
@@ -733,9 +871,6 @@ export function activate(context: vscode.ExtensionContext) {
                                 console.log('CtrlZTree Webview: hoverNode event. Node ID:', params.node);
                                 if (network && network.canvas && network.canvas.body && network.canvas.body.container) {
                                     network.canvas.body.container.style.cursor = 'pointer';
-                                    console.log('CtrlZTree Webview: Set cursor to pointer on network canvas container.');
-                                } else {
-                                    console.log('CtrlZTree Webview: Network canvas container not found for cursor change on hover.');
                                 }
                             });
 
@@ -743,9 +878,25 @@ export function activate(context: vscode.ExtensionContext) {
                                 console.log('CtrlZTree Webview: blurNode event. Node ID:', params.node);
                                 if (network && network.canvas && network.canvas.body && network.canvas.body.container) {
                                     network.canvas.body.container.style.cursor = 'default';
-                                    console.log('CtrlZTree Webview: Reset cursor to default on network canvas container.');
-                                } else {
-                                    console.log('CtrlZTree Webview: Network canvas container not found for cursor change on blur.');
+                                }
+                            });
+                            
+                            // Update button position when network is stabilized or zoomed
+                            network.on("stabilized", function() {
+                                if (selectedNodeId) {
+                                    updateActionButtonPosition(selectedNodeId);
+                                }
+                            });
+                            
+                            network.on("zoom", function() {
+                                if (selectedNodeId) {
+                                    updateActionButtonPosition(selectedNodeId);
+                                }
+                            });
+                            
+                            network.on("dragEnd", function() {
+                                if (selectedNodeId) {
+                                    updateActionButtonPosition(selectedNodeId);
                                 }
                             });
                         } else {
@@ -931,6 +1082,63 @@ export function activate(context: vscode.ExtensionContext) {
             panel.webview.onDidReceiveMessage(
                 async message => {
                     switch (message.command) {
+                        case 'openDiff':
+                            outputChannel.appendLine(`CtrlZTree: openDiff requested for hash ${message.shortHash}`);
+                            try {
+                                const currentPanelHashMap = panelToFullHashMap.get(panel);
+                                if (!currentPanelHashMap) {
+                                    vscode.window.showErrorMessage('CtrlZTree: Internal error - hash map not found for this panel.');
+                                    return;
+                                }
+                                
+                                const shortHash = message.shortHash;
+                                const fullHash = currentPanelHashMap.get(shortHash);
+                                const targetTree = historyTrees.get(docUriString);
+                                
+                                if (!fullHash || !targetTree) {
+                                    vscode.window.showWarningMessage(`CtrlZTree: Could not find node ${shortHash} for diff.`);
+                                    return;
+                                }
+                                
+                                // Get the node and its parent
+                                const allNodes = targetTree.getAllNodes();
+                                const node = allNodes.get(fullHash);
+                                
+                                if (!node || !node.parent) {
+                                    vscode.window.showInformationMessage('CtrlZTree: This is the root node, no parent to compare with.');
+                                    return;
+                                }
+                                
+                                // Get content of parent and current node
+                                const parentContent = targetTree.getContent(node.parent);
+                                const currentContent = targetTree.getContent(fullHash);
+                                
+                                // Create virtual documents for diff
+                                const parentShortHash = node.parent.substring(0, 8);
+                                const fileName = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString)?.uri.path.split(/[\\/]/).pop() || 'document';
+                                
+                                const parentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${parentShortHash}?${encodeURIComponent(parentContent)}`);
+                                const currentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${shortHash}?${encodeURIComponent(currentContent)}`);
+                                
+                                // Open diff view in a new column beside the current one
+                                // This prevents the diff from replacing the graph view
+                                await vscode.commands.executeCommand(
+                                    'vscode.diff',
+                                    parentUri,
+                                    currentUri,
+                                    `${fileName}: ${parentShortHash} ↔ ${shortHash}`,
+                                    {
+                                        viewColumn: vscode.ViewColumn.Beside,
+                                        preview: false
+                                    }
+                                );
+                                
+                                outputChannel.appendLine(`CtrlZTree: Diff view opened for ${shortHash}`);
+                            } catch (e: any) {
+                                outputChannel.appendLine(`CtrlZTree: Error opening diff: ${e.message} Stack: ${e.stack}`);
+                                vscode.window.showErrorMessage(`CtrlZTree: Could not open diff: ${e.message}`);
+                            }
+                            return;
                         case 'navigateToNode':
                             // Check if the target document is open in ANY editor group (main editor or side panels)
                             const allVisibleEditors = vscode.window.visibleTextEditors;
@@ -1210,17 +1418,33 @@ export function activate(context: vscode.ExtensionContext) {
             if (isApplyingEdit) { 
                 outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument - skipping due to isApplyingEdit.');
                 return; 
-            } 
+            }
+            
+            // Skip diff documents - they should not be tracked
+            if (event.document.uri.scheme === DIFF_SCHEME) {
+                return;
+            }
+            
+            // Skip read-only documents (like diff views, output panels, etc.)
+            const editor = vscode.window.visibleTextEditors.find(e => e.document === event.document);
+            if (editor && editor.document.uri.scheme !== 'file' && editor.document.uri.scheme !== 'untitled') {
+                outputChannel.appendLine(`CtrlZTree: Skipping read-only or special document with scheme: ${editor.document.uri.scheme}`);
+                return;
+            }
             
             if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') {
                 const docUriString = event.document.uri.toString();
+                
+                // Update last valid editor URI
+                lastValidEditorUri = docUriString;
+                
                 const currentText = event.document.getText();
-                const editor = vscode.window.activeTextEditor;
+                const activeEditor = vscode.window.activeTextEditor;
                 
                 // Get current cursor position if this is the active document
                 let currentPosition: vscode.Position | undefined;
-                if (editor && editor.document.uri.toString() === docUriString) {
-                    currentPosition = editor.selection.active;
+                if (activeEditor && activeEditor.document.uri.toString() === docUriString) {
+                    currentPosition = activeEditor.selection.active;
                 }
                 
                 // Determine change type and whether to group
@@ -1291,8 +1515,29 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             
+            // Skip read-only or special scheme documents (diff views, output panels, etc.)
+            if (editor.document.uri.scheme !== 'file' && editor.document.uri.scheme !== 'untitled') {
+                outputChannel.appendLine(`CtrlZTree: Skipping read-only/special editor with scheme: ${editor.document.uri.scheme}`);
+                // If we have a panel open, show the tree for the last valid editor
+                if (lastValidEditorUri) {
+                    const lastValidDoc = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === lastValidEditorUri);
+                    if (lastValidDoc) {
+                        const tree = historyTrees.get(lastValidEditorUri);
+                        const panel = activeVisualizationPanels.get(lastValidEditorUri);
+                        if (tree && panel && isPanelValid(panel)) {
+                            outputChannel.appendLine(`CtrlZTree: Showing tree for last valid editor: ${lastValidEditorUri}`);
+                            postUpdatesToWebview(panel, tree, lastValidEditorUri);
+                        }
+                    }
+                }
+                return;
+            }
+            
             const docUriString = editor.document.uri.toString();
             outputChannel.appendLine(`CtrlZTree: Active editor changed to ${docUriString}`);
+            
+            // Update last valid editor URI
+            lastValidEditorUri = docUriString;
             
             // Check if there's already an active panel
             const existingPanel = activeVisualizationPanels.get(docUriString);

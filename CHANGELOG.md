@@ -2,6 +2,40 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.4.0] - 2025-11-12
+
+### Added
+- **Diff View Integration**: Integrated action buttons appear when selecting nodes with parents
+  - Click any node to select it and reveal action buttons
+  - "📊 View Diff" button appears below selected nodes that have a parent
+  - Click the diff button to open a side-by-side diff view
+  - Diff view shows changes between parent node and selected node
+  - Uses VS Code's native diff viewer with syntax highlighting
+  - Diff view opens beside the graph view (not replacing it)
+  - Diff documents are not tracked by the extension to prevent circular tracking issues
+- **Read-Only Document Handling**: Read-only editors (like diff views) are now properly excluded from tracking
+  - When a read-only document is active, the tree view shows the last valid editor's history
+  - Prevents bugs from tracking internal VS Code views
+
+### Enhanced
+- **Improved Node Interaction**: Cleaner interface with selection-based action buttons
+- **Better User Experience**: Diff button integrated with selected node, positioned below it
+- **Smart View Management**: Diff opens in a separate column, preserving the tree visualization
+- **Enhanced Tooltips**: Tooltips mention diff functionality for nodes with parents
+- **Stable Button Positioning**: Action buttons follow node position during zoom, pan, and drag operations
+
+### Technical Details
+- Added `ctrlztree-diff` URI scheme for virtual diff documents
+- Implemented `TextDocumentContentProvider` for diff content
+- Selection-based UI with `selectNode` and `deselectNode` event handlers
+- Action button positioned using vis-network's bounding box and coordinate transformation
+- Added document scheme filtering for read-only documents
+- Track last valid editor URI to maintain tree view when switching to read-only documents
+- Diff view opens with `ViewColumn.Beside` to avoid replacing graph panel
+- Button position updates on network stabilization, zoom, and drag events
+- Skips tracking for common read-only schemes: vscode, output, debug, git, search-editor
+- Diff view opens with `ViewColumn.Beside` to avoid replacing graph panel
+
 ## [0.3.5] - 2025-07-27
 
 ### Fixed

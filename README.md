@@ -24,6 +24,8 @@ CtrlZTree brings tree-based undo/redo functionality to VS Code, inspired by the 
 - **Visual Indicators**: Current position highlighted in red, other states in blue
 - **Enhanced Tooltips**: Hover over nodes to see concise diff previews showing only changed lines
 - **Smart Content Display**: Tooltips show git-style diffs with intelligent truncation for large changes
+- **Integrated Action Buttons**: Select any node to reveal action buttons below it, including "📊 View Diff" for nodes with parents
+- **Read-Only Document Handling**: Diff views and other read-only documents don't interfere with tree tracking
 
 ## 🚀 How It Works
 
@@ -43,6 +45,7 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 - **Linear Undo/Redo**: When there's only one path, behaves like normal undo/redo
 - **Branch Selection**: When multiple paths exist, shows a picker with content previews
 - **Visual Navigation**: Click any node in the tree view to jump directly to that state
+- **Diff Comparison**: Select a node to reveal the "📊 View Diff" button, then click it to view changes from parent in a separate column
 
 ## 🎮 Usage
 
@@ -62,10 +65,13 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 3. **Dynamic Updates**: Panel automatically switches to show the history tree of whichever file you're currently editing
 4. **Current state** is prominently displayed at the top level with enhanced styling (larger, bold text and thicker border)
 5. **Other states** appear in blue with standard styling
-6. **Click any node** to instantly navigate to that document state
-7. **Hover over nodes** to see enhanced tooltips with concise change previews
-8. **Panel title** updates automatically to show "CtrlZTree \<filename\>" for the active file
-9. **Seamless switching**: Move between different files and the tree view follows automatically
+6. **Click any node** to select it and navigate to that document state
+7. **Action buttons** appear below the selected node (for nodes with parents)
+8. **Click "📊 View Diff"** to open a side-by-side diff view showing changes from parent (opens beside the graph)
+9. **Hover for tooltips** to see enhanced previews with concise change summaries
+10. **Panel title** updates automatically to show "CtrlZTree \<filename\>" for the active file
+11. **Seamless switching**: Move between different files and the tree view follows automatically
+12. **Read-only handling**: When viewing diff or other read-only documents, tree shows last valid editor's history
 
 ### Enhanced Tooltips (v0.2.0)
 - **Git-style Diffs**: Tooltips show only the actual changed lines (+ and - lines)
@@ -85,8 +91,10 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
    ├── B → C
    └── D → E (current)
    ```
-6. **Click node C** to instantly return to that state
-7. **Continue editing** to extend any branch
+6. **Click node C** to select it and navigate to that state
+7. **"📊 View Diff" button** appears below node C
+8. **Click the diff button** to see what changed from B to C in a side-by-side diff view (opens beside the tree)
+9. **Continue editing** to extend any branch
 
 ## 🔧 Requirements
 
@@ -99,6 +107,7 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 - Automatically activates when VS Code starts
 - Replaces default undo/redo keybindings when editing text
 - Creates separate history trees for each file
+- Only tracks editable files (ignores read-only files, diff views, and special VS Code documents)
 
 ## 🐛 Known Issues
 
@@ -117,7 +126,21 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.3.5 (Current)
+### 0.4.0 (Current)
+
+**Diff View Integration & Enhanced Visualization:**
+- ✅ **Integrated Action Buttons**: Select any node to reveal action buttons positioned below it
+- ✅ **Native VS Code Diff Viewer**: Uses VS Code's built-in diff viewer with syntax highlighting and change indicators
+- ✅ **Smart Button Visibility**: "📊 View Diff" button only shown for selected nodes that can be compared
+- ✅ **Parent-Child Comparison**: Diff shows exactly what changed from parent node to selected node
+- ✅ **Separate Column View**: Diff opens beside the graph view, preserving both panels
+- ✅ **Non-Tracked Diff Documents**: Diff view documents use special URI scheme to prevent circular tracking
+- ✅ **Read-Only Document Handling**: Diff views and read-only editors properly excluded from tracking
+- ✅ **Persistent Tree View**: When viewing read-only documents, tree shows last valid editor's history
+- ✅ **Stable Positioning**: Action buttons follow node position during zoom, pan, and drag
+- ✅ **Cleaner Node Labels**: Removed permanent diff indicators for cleaner visualization
+
+### 0.3.5
 
 **Webview Stability & Error Handling:**
 - ✅ **Fixed Webview Disposal Error**: Resolved "Webview is disposed" error that occurred when interacting with closed panels
