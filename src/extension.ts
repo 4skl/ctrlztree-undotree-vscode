@@ -210,14 +210,15 @@ class CtrlZTree {
     }
 }
 
-// Module-level variables for cleanup
+        // Module-level variables for cleanup
 let documentChangeTimeouts: Map<string, NodeJS.Timeout> = new Map();
 let pendingChanges: Map<string, string> = new Map();
 let lastChangeTime: Map<string, number> = new Map();
 let lastCursorPosition: Map<string, vscode.Position> = new Map();
 let lastChangeType: Map<string, 'typing' | 'deletion' | 'other'> = new Map();
 
-export function activate(context: vscode.ExtensionContext) {
+// Virtual document scheme for diff views - these should NOT be tracked
+const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.ExtensionContext) {
     let outputChannel: vscode.OutputChannel = vscode.window.createOutputChannel("CtrlZTree");
 
     try {
@@ -227,7 +228,20 @@ export function activate(context: vscode.ExtensionContext) {
         const activeVisualizationPanels = new Map<string, vscode.WebviewPanel>();
         const panelToFullHashMap = new Map<vscode.WebviewPanel, Map<string, string>>();
         let isApplyingEdit = false; 
-        const processingDocuments = new Set<string>(); // Track documents currently being processed 
+        const processingDocuments = new Set<string>(); // Track documents currently being processed
+        let lastValidEditorUri: string | null = null; // Track last non-read-only editor
+        let lastOpenedDiffEditor: vscode.TextEditor | null = null; // Track last opened diff editor to close it
+        
+        // Register text document content provider for diff views
+        const diffContentProvider = new (class implements vscode.TextDocumentContentProvider {
+            provideTextDocumentContent(uri: vscode.Uri): string {
+                // The content is encoded in the URI query
+                return uri.query;
+            }
+        })();
+        context.subscriptions.push(
+            vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, diffContentProvider)
+        ); 
         
         const ACTION_TIMEOUT = 500; // Shorter timeout for action boundaries
         const PAUSE_THRESHOLD = 1500; // If user pauses longer than this, create new action
@@ -413,11 +427,18 @@ export function activate(context: vscode.ExtensionContext) {
                 // Format timestamp as "time since now"
                 const timeAgo = formatTimeAgo(node.timestamp);
                 
+                // Store whether node has parent for later use
+                const hasParent = node.parent !== null;
+                
                 nodesArrayForVis.push({
                     id: shortHash,
                     label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
-                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`
+                    title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`,
+                    hasParent: hasParent,
+                    // Store base label for later use when updating
+                    baseLabel: `${timeAgo}\n${shortHash}\n${addedTextPreview}`
                 });
+                
                 if (node.parent) {
                     edgesArrayForVis.push({
                         from: node.parent.substring(0, 8),
@@ -538,6 +559,7 @@ export function activate(context: vscode.ExtensionContext) {
                         height: 100vh;
                         border: 1px solid var(--vscode-border);
                         background-color: var(--vscode-background);
+                        position: relative;
                     }
                     
                     /* Ensure vis-network respects theme */
@@ -549,6 +571,33 @@ export function activate(context: vscode.ExtensionContext) {
                     .vis-network:hover { 
                         cursor: pointer !important; 
                     }
+                    
+                    /* Floating diff button */
+                    #diff-button {
+                        position: absolute;
+                        display: none;
+                        background-color: var(--vscode-button-background, #0e639c);
+                        color: var(--vscode-button-foreground, #ffffff);
+                        border: 1px solid var(--vscode-button-border, #0e639c);
+                        border-radius: 3px;
+                        padding: 4px 12px;
+                        font-size: 11px;
+                        font-family: var(--vscode-font-family);
+                        cursor: pointer;
+                        white-space: nowrap;
+                        z-index: 1000;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+                        transition: background-color 0.15s ease;
+                    }
+                    
+                    #diff-button:hover {
+                        background-color: var(--vscode-button-hoverBackground, #1177bb);
+                    }
+                    
+                    #diff-button:active {
+                        background-color: var(--vscode-button-hoverBackground, #0d5a8f);
+                        transform: translateY(1px);
+                    }
                 </style>
             </head>
             <body>
@@ -557,6 +606,7 @@ export function activate(context: vscode.ExtensionContext) {
                     <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
                 </div>
                 <div id="tree-visualization"></div>
+                <button id="diff-button">📊 View Diff</button>
                 <script>
                 try {
                     console.log('CtrlZTree Webview: Script tag started. Initializing...'); // New very early log
@@ -623,8 +673,13 @@ export function activate(context: vscode.ExtensionContext) {
 
                         const colorUpdates = allNodeIds.map(nodeId => {
                             const isHead = nodeId === currentHeadNodeId;
+                            const nodeObj = nodes.get(nodeId) || {};
+                            // Use the base label without adding text-based button
+                            const label = nodeObj.baseLabel;
+
                             return {
                                 id: nodeId,
+                                label: label,
                                 color: {
                                     background: isHead ? currentColor : accentColor,
                                     border: foregroundColor,
@@ -718,14 +773,76 @@ export function activate(context: vscode.ExtensionContext) {
                             };
                             network = new vis.Network(container, data, options);
 
+                            // Get reference to the floating diff button
+                            const diffButton = document.getElementById('diff-button');
+                            
+                            // Function to update diff button position and visibility
+                            function updateDiffButton() {
+                                if (!diffButton || !currentHeadNodeId) {
+                                    if (diffButton) diffButton.style.display = 'none';
+                                    return;
+                                }
+                                
+                                const headNodeData = nodes.get(currentHeadNodeId);
+                                if (!headNodeData || !headNodeData.hasParent) {
+                                    diffButton.style.display = 'none';
+                                    return;
+                                }
+                                
+                                try {
+                                    // Get node position in DOM coordinates
+                                    const nodePosition = network.getPositions([currentHeadNodeId])[currentHeadNodeId];
+                                    const domPosition = network.canvasToDOM({x: nodePosition.x, y: nodePosition.y});
+                                    const boundingBox = network.getBoundingBox(currentHeadNodeId);
+                                    const domBoundingBox = {
+                                        bottom: network.canvasToDOM({x: 0, y: boundingBox.bottom}).y
+                                    };
+                                    
+                                    // Position button at bottom center of the head node
+                                    diffButton.style.left = (domPosition.x - diffButton.offsetWidth / 2) + 'px';
+                                    diffButton.style.top = (domBoundingBox.bottom + 5) + 'px';
+                                    diffButton.style.display = 'block';
+                                } catch (e) {
+                                    console.error('CtrlZTree Webview: Error positioning diff button:', e);
+                                    diffButton.style.display = 'none';
+                                }
+                            }
+                            
+                            // Setup diff button click handler
+                            if (diffButton) {
+                                diffButton.addEventListener('click', () => {
+                                    console.log('CtrlZTree Webview: Diff button clicked for head:', currentHeadNodeId);
+                                    if (currentHeadNodeId) {
+                                        vscode.postMessage({
+                                            command: 'openDiff',
+                                            shortHash: currentHeadNodeId
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            // Update button position after network stabilizes and on viewport changes
+                            network.on('stabilized', updateDiffButton);
+                            network.on('zoom', updateDiffButton);
+                            network.on('dragEnd', updateDiffButton);
+                            
+                            // Initial button update
+                            setTimeout(updateDiffButton, 100);
+
                             network.on("click", function (params) {
                                 if (params.nodes.length > 0) {
                                     const clickedNodeId = params.nodes[0];
+                                    const nodeData = nodes.get(clickedNodeId);
+                                    
+                                    // Regular node navigation (diff button has its own click handler now)
                                     console.log('CtrlZTree Webview: Node clicked:', clickedNodeId);
                                     vscode.postMessage({
                                         command: 'navigateToNode',
                                         shortHash: clickedNodeId
                                     });
+                                } else {
+                                    // Clicked on empty space, deselect
+                                    network.unselectAll();
                                 }
                             });
 
@@ -733,9 +850,6 @@ export function activate(context: vscode.ExtensionContext) {
                                 console.log('CtrlZTree Webview: hoverNode event. Node ID:', params.node);
                                 if (network && network.canvas && network.canvas.body && network.canvas.body.container) {
                                     network.canvas.body.container.style.cursor = 'pointer';
-                                    console.log('CtrlZTree Webview: Set cursor to pointer on network canvas container.');
-                                } else {
-                                    console.log('CtrlZTree Webview: Network canvas container not found for cursor change on hover.');
                                 }
                             });
 
@@ -743,13 +857,38 @@ export function activate(context: vscode.ExtensionContext) {
                                 console.log('CtrlZTree Webview: blurNode event. Node ID:', params.node);
                                 if (network && network.canvas && network.canvas.body && network.canvas.body.container) {
                                     network.canvas.body.container.style.cursor = 'default';
-                                    console.log('CtrlZTree Webview: Reset cursor to default on network canvas container.');
-                                } else {
-                                    console.log('CtrlZTree Webview: Network canvas container not found for cursor change on blur.');
                                 }
                             });
                         } else {
                             console.log('CtrlZTree Webview: Network already exists. DataSets updated and colors reapplied.');
+                            // Update diff button when tree updates
+                            setTimeout(() => {
+                                const diffButton = document.getElementById('diff-button');
+                                if (diffButton && !currentHeadNodeId) {
+                                    diffButton.style.display = 'none';
+                                } else if (diffButton && currentHeadNodeId) {
+                                    const headNodeData = nodes.get(currentHeadNodeId);
+                                    if (!headNodeData || !headNodeData.hasParent) {
+                                        diffButton.style.display = 'none';
+                                    } else {
+                                        try {
+                                            const nodePosition = network.getPositions([currentHeadNodeId])[currentHeadNodeId];
+                                            const domPosition = network.canvasToDOM({x: nodePosition.x, y: nodePosition.y});
+                                            const boundingBox = network.getBoundingBox(currentHeadNodeId);
+                                            const domBoundingBox = {
+                                                bottom: network.canvasToDOM({x: 0, y: boundingBox.bottom}).y
+                                            };
+                                            
+                                            diffButton.style.left = (domPosition.x - diffButton.offsetWidth / 2) + 'px';
+                                            diffButton.style.top = (domBoundingBox.bottom + 5) + 'px';
+                                            diffButton.style.display = 'block';
+                                        } catch (e) {
+                                            console.error('CtrlZTree Webview: Error updating diff button position:', e);
+                                            diffButton.style.display = 'none';
+                                        }
+                                    }
+                                }
+                            }, 100);
                         }
                     }
 
@@ -931,6 +1070,86 @@ export function activate(context: vscode.ExtensionContext) {
             panel.webview.onDidReceiveMessage(
                 async message => {
                     switch (message.command) {
+                        case 'openDiff':
+                            outputChannel.appendLine(`CtrlZTree: openDiff requested for hash ${message.shortHash}`);
+                            try {
+                                const currentPanelHashMap = panelToFullHashMap.get(panel);
+                                if (!currentPanelHashMap) {
+                                    vscode.window.showErrorMessage('CtrlZTree: Internal error - hash map not found for this panel.');
+                                    return;
+                                }
+                                
+                                const shortHash = message.shortHash;
+                                const fullHash = currentPanelHashMap.get(shortHash);
+                                const targetTree = historyTrees.get(docUriString);
+                                
+                                if (!fullHash || !targetTree) {
+                                    vscode.window.showWarningMessage(`CtrlZTree: Could not find node ${shortHash} for diff.`);
+                                    return;
+                                }
+                                
+                                // Get the node and its parent
+                                const allNodes = targetTree.getAllNodes();
+                                const node = allNodes.get(fullHash);
+                                
+                                if (!node || !node.parent) {
+                                    vscode.window.showInformationMessage('CtrlZTree: This is the root node, no parent to compare with.');
+                                    return;
+                                }
+                                
+                                // Get content of parent and current node
+                                const parentContent = targetTree.getContent(node.parent);
+                                const currentContent = targetTree.getContent(fullHash);
+                                
+                                // Create virtual documents for diff
+                                const parentShortHash = node.parent.substring(0, 8);
+                                const fileName = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString)?.uri.path.split(/[\\/]/).pop() || 'document';
+                                
+                                const parentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${parentShortHash}?${encodeURIComponent(parentContent)}`);
+                                const currentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${shortHash}?${encodeURIComponent(currentContent)}`);
+                                
+                                // Close previously opened diff editor if it exists
+                                if (lastOpenedDiffEditor && !lastOpenedDiffEditor.document.isClosed) {
+                                    // Find the tab and close it
+                                    const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs);
+                                    const diffTab = tabs.find(tab => 
+                                        tab.input instanceof vscode.TabInputTextDiff &&
+                                        (tab.input.original.scheme === DIFF_SCHEME || tab.input.modified.scheme === DIFF_SCHEME)
+                                    );
+                                    if (diffTab) {
+                                        await vscode.window.tabGroups.close(diffTab);
+                                        outputChannel.appendLine(`CtrlZTree: Closed previous diff tab`);
+                                    }
+                                }
+                                
+                                // Open diff view in a new column beside the current one
+                                // This prevents the diff from replacing the graph view
+                                const diffEditor = await vscode.commands.executeCommand(
+                                    'vscode.diff',
+                                    parentUri,
+                                    currentUri,
+                                    `${fileName}: ${parentShortHash} ↔ ${shortHash}`,
+                                    {
+                                        viewColumn: vscode.ViewColumn.Beside,
+                                        preview: false
+                                    }
+                                );
+                                
+                                // Store reference to the diff editor
+                                // Note: vscode.diff doesn't return the editor, so we find it
+                                const openedDiffEditor = vscode.window.visibleTextEditors.find(editor => 
+                                    editor.document.uri.scheme === DIFF_SCHEME
+                                );
+                                if (openedDiffEditor) {
+                                    lastOpenedDiffEditor = openedDiffEditor;
+                                }
+                                
+                                outputChannel.appendLine(`CtrlZTree: Diff view opened for ${shortHash}`);
+                            } catch (e: any) {
+                                outputChannel.appendLine(`CtrlZTree: Error opening diff: ${e.message} Stack: ${e.stack}`);
+                                vscode.window.showErrorMessage(`CtrlZTree: Could not open diff: ${e.message}`);
+                            }
+                            return;
                         case 'navigateToNode':
                             // Check if the target document is open in ANY editor group (main editor or side panels)
                             const allVisibleEditors = vscode.window.visibleTextEditors;
@@ -1210,17 +1429,33 @@ export function activate(context: vscode.ExtensionContext) {
             if (isApplyingEdit) { 
                 outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument - skipping due to isApplyingEdit.');
                 return; 
-            } 
+            }
+            
+            // Skip diff documents - they should not be tracked
+            if (event.document.uri.scheme === DIFF_SCHEME) {
+                return;
+            }
+            
+            // Skip read-only documents (like diff views, output panels, etc.)
+            const editor = vscode.window.visibleTextEditors.find(e => e.document === event.document);
+            if (editor && editor.document.uri.scheme !== 'file' && editor.document.uri.scheme !== 'untitled') {
+                outputChannel.appendLine(`CtrlZTree: Skipping read-only or special document with scheme: ${editor.document.uri.scheme}`);
+                return;
+            }
             
             if (event.document.uri.scheme === 'file' || event.document.uri.scheme === 'untitled') {
                 const docUriString = event.document.uri.toString();
+                
+                // Update last valid editor URI
+                lastValidEditorUri = docUriString;
+                
                 const currentText = event.document.getText();
-                const editor = vscode.window.activeTextEditor;
+                const activeEditor = vscode.window.activeTextEditor;
                 
                 // Get current cursor position if this is the active document
                 let currentPosition: vscode.Position | undefined;
-                if (editor && editor.document.uri.toString() === docUriString) {
-                    currentPosition = editor.selection.active;
+                if (activeEditor && activeEditor.document.uri.toString() === docUriString) {
+                    currentPosition = activeEditor.selection.active;
                 }
                 
                 // Determine change type and whether to group
@@ -1291,8 +1526,29 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             
+            // Skip read-only or special scheme documents (diff views, output panels, etc.)
+            if (editor.document.uri.scheme !== 'file' && editor.document.uri.scheme !== 'untitled') {
+                outputChannel.appendLine(`CtrlZTree: Skipping read-only/special editor with scheme: ${editor.document.uri.scheme}`);
+                // If we have a panel open, show the tree for the last valid editor
+                if (lastValidEditorUri) {
+                    const lastValidDoc = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === lastValidEditorUri);
+                    if (lastValidDoc) {
+                        const tree = historyTrees.get(lastValidEditorUri);
+                        const panel = activeVisualizationPanels.get(lastValidEditorUri);
+                        if (tree && panel && isPanelValid(panel)) {
+                            outputChannel.appendLine(`CtrlZTree: Showing tree for last valid editor: ${lastValidEditorUri}`);
+                            postUpdatesToWebview(panel, tree, lastValidEditorUri);
+                        }
+                    }
+                }
+                return;
+            }
+            
             const docUriString = editor.document.uri.toString();
             outputChannel.appendLine(`CtrlZTree: Active editor changed to ${docUriString}`);
+            
+            // Update last valid editor URI
+            lastValidEditorUri = docUriString;
             
             // Check if there's already an active panel
             const existingPanel = activeVisualizationPanels.get(docUriString);

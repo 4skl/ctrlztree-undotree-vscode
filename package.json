@@ -10,7 +10,7 @@
     "tree",
     "ctrlz"
   ],
-  "version": "0.3.5",
+  "version": "0.4.0",
   "publisher": "4skl",
   "icon": "icon.png",
   "repository": {
@@ -24,9 +24,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:ctrlztree.visualize",
-    "onLanguage:*"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
