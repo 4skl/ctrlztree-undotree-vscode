@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { generateDiff, applyDiff, serializeDiff, deserializeDiff, generateDiffSummary } from './lcs';
+import { generateDiff, applyDiff, serializeDiff, deserializeDiff, generateDiffSummary, reverseDiff, DiffOperation } from './lcs';
 
 interface TreeNode {
     hash: string;
@@ -16,44 +16,91 @@ interface TreeNode {
 class CtrlZTree {
     private nodes: Map<string, TreeNode>;
     private head: string | null;
-    private readonly trueEmptyRootContent: string = ""; // Ultimate root is empty
 
     constructor(initialDocumentContent: string) { // Content of the document when tree is first made
         this.nodes = new Map<string, TreeNode>();
         
-        const trueEmptyRootHash = this.calculateHash(this.trueEmptyRootContent);        const trueEmptyRootNode: TreeNode = {
-            hash: trueEmptyRootHash,
+        const rootHash = this.calculateHash(initialDocumentContent);
+        const rootNode: TreeNode = {
+            hash: rootHash,
             parent: null,
             children: [],
             diff: null,
             timestamp: Date.now()
         };
-        this.nodes.set(trueEmptyRootHash, trueEmptyRootNode);
-        this.head = trueEmptyRootHash; // Start at the true empty root
-
-        // If the document wasn't initially empty, set its content as the first state.
-        if (initialDocumentContent !== this.trueEmptyRootContent) {
-            this.set(initialDocumentContent);
-        }
+        this.nodes.set(rootHash, rootNode);
+        this.head = rootHash; // Start at the root
     }
 
     private calculateHash(content: string): string {
         return crypto.createHash('sha256').update(content).digest('hex');
     }
 
-    // Get the current content by applying all diffs from root to head
-    private reconstructContent(hash: string): string {
-        const path = this.getPathToRoot(hash);
-        let content = this.trueEmptyRootContent; // Start from the empty root
+    // Get the current content by applying all diffs from head to target
+    // We use the current content (from editor) as the starting point because we don't store full content
+    private reconstructContent(targetHash: string, currentContent: string, fromHash: string): string {
+        if (!fromHash) { return currentContent; }
         
-        // Apply diffs in reverse order (from child of empty root to target)
-        for (let i = path.length - 2; i >= 0; i--) {
-            const node = this.nodes.get(path[i])!;
-            if (node.diff) {
-                const diffOps = deserializeDiff(node.diff);
+        // Find path from head to target
+        // This involves finding the Lowest Common Ancestor (LCA)
+        const headPath = this.getPathToRoot(fromHash);
+        const targetPath = this.getPathToRoot(targetHash);
+        
+        // Find LCA
+        let lcaHash: string | null = null;
+        let headIndex = -1;
+        let targetIndex = -1;
+        
+        // Paths are [Node, Parent, ..., Root]
+        // Iterate backwards to find the last common node (which is the LCA)
+        let i = headPath.length - 1;
+        let j = targetPath.length - 1;
+        
+        while (i >= 0 && j >= 0) {
+            if (headPath[i] === targetPath[j]) {
+                lcaHash = headPath[i];
+                headIndex = i;
+                targetIndex = j;
+            } else {
+                break;
+            }
+            i--;
+            j--;
+        }
+        
+        if (!lcaHash) {
+            // Should not happen if they share a root
+            return currentContent;
+        }
+        
+        let content = currentContent;
+        
+        // 1. Go up from Head to LCA (Undo / Reverse Diffs)
+        // headPath is [Head, ..., LCA, ...]
+        // We need to traverse from Head to LCA (exclusive of LCA)
+        for (let k = 0; k < headIndex; k++) {
+            const childHash = headPath[k];
+            const childNode = this.nodes.get(childHash)!;
+            if (childNode.diff) {
+                const diffOps = deserializeDiff(childNode.diff);
+                const reversedOps = reverseDiff(diffOps);
+                content = applyDiff(content, reversedOps);
+            }
+        }
+        
+        // 2. Go down from LCA to Target (Redo / Forward Diffs)
+        // targetPath is [Target, ..., LCA, ...]
+        // We need to traverse from LCA (child of LCA) to Target
+        // Iterate in reverse order of targetPath, from child of LCA to Target
+        for (let k = targetIndex - 1; k >= 0; k--) {
+            const childHash = targetPath[k];
+            const childNode = this.nodes.get(childHash)!;
+            if (childNode.diff) {
+                const diffOps = deserializeDiff(childNode.diff);
                 content = applyDiff(content, diffOps);
             }
         }
+        
         return content;
     }
 
@@ -75,17 +122,16 @@ class CtrlZTree {
     }
 
     // Set new content and compute diff
-    set(content: string, cursorPosition?: vscode.Position): string {
-        const newHash = this.calculateHash(content);
+    set(newContent: string, oldContent: string, cursorPosition?: vscode.Position): string {
+        const newHash = this.calculateHash(newContent);
 
         if (this.nodes.has(newHash)) {
             this.head = newHash;
             return newHash;
         }
 
-        const currentContent = this.head ? this.reconstructContent(this.head) : this.trueEmptyRootContent;
-        
-        const diffOps = generateDiff(currentContent, content);
+        // We use oldContent (which should match this.head) to generate diff
+        const diffOps = generateDiff(oldContent, newContent);
         const serializedDiff = serializeDiff(diffOps);
           // Create new node
         const node: TreeNode = {
@@ -121,12 +167,12 @@ class CtrlZTree {
     }
 
     // Find the latest non-empty state from current position
-    findLatestNonEmptyState(): string | null {
+    findLatestNonEmptyState(currentContent: string): string | null {
         if (!this.head) { return null; }
         
         // Check if current state is non-empty
-        const currentContent = this.getContent(this.head);
-        if (currentContent.trim() !== '') {
+        const headContent = this.getContent(currentContent, this.head);
+        if (headContent.trim() !== '') {
             return this.head; // Current state is already non-empty
         }
         
@@ -135,12 +181,7 @@ class CtrlZTree {
         let latestTimestamp = 0;
         
         for (const [hash, node] of this.nodes) {
-            // Skip the empty root
-            if (hash === this.calculateHash(this.trueEmptyRootContent)) {
-                continue;
-            }
-            
-            const content = this.getContent(hash);
+            const content = this.getContent(currentContent, hash);
             if (content.trim() !== '' && node.timestamp > latestTimestamp) {
                 latestNonEmptyHash = hash;
                 latestTimestamp = node.timestamp;
@@ -151,8 +192,8 @@ class CtrlZTree {
     }
 
     // Special undo for empty files - goes to latest non-empty state
-    zToLatestNonEmpty(): string | null {
-        const latestNonEmpty = this.findLatestNonEmptyState();
+    zToLatestNonEmpty(currentContent: string): string | null {
+        const latestNonEmpty = this.findLatestNonEmptyState(currentContent);
         if (latestNonEmpty && latestNonEmpty !== this.head) {
             this.head = latestNonEmpty;
             return this.head;
@@ -187,12 +228,22 @@ class CtrlZTree {
     }
 
     // Get content at head or specific hash
-    getContent(hash?: string): string {
+    getContent(currentContent: string, hash?: string, fromHash?: string): string {
         const targetHash = hash || this.head;
+        const startHash = fromHash || this.head;
+
         if (!targetHash || !this.nodes.has(targetHash)) {
-            return this.trueEmptyRootContent; // Fallback to empty content
+            return currentContent; // Fallback
         }
-        return this.reconstructContent(targetHash);
+        if (!startHash || !this.nodes.has(startHash)) {
+            return currentContent;
+        }
+
+        if (targetHash === startHash) {
+            return currentContent;
+        }
+
+        return this.reconstructContent(targetHash, currentContent, startHash);
     }
     
     // Get cursor position for head or specific hash
@@ -216,6 +267,7 @@ let pendingChanges: Map<string, string> = new Map();
 let lastChangeTime: Map<string, number> = new Map();
 let lastCursorPosition: Map<string, vscode.Position> = new Map();
 let lastChangeType: Map<string, 'typing' | 'deletion' | 'other'> = new Map();
+let lastKnownContent: Map<string, string> = new Map(); // Track content for diff generation
 
 // Virtual document scheme for diff views - these should NOT be tracked
 const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.ExtensionContext) {
@@ -377,24 +429,26 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
         }
 
         // Helper function to extract just the added text for showing in tooltip after commit ID
-        function getAddedTextPreview(node: TreeNode, tree: CtrlZTree): string {
+        function getAddedTextPreview(node: TreeNode, tree: CtrlZTree, currentContent: string): string {
             if (!node.diff) {
-                return "Initial commit";
+                // For root node, show content
+                const nodeContent = tree.getContent(currentContent, node.hash);
+                return nodeContent ? formatTextForNodeDisplay(nodeContent) : "Initial commit (Empty)";
             }
             
             try {
                 const parentHash = node.parent;
                 if (!parentHash) {
-                    // For root node, show content
-                    const currentContent = tree.getContent(node.hash);
-                    return formatTextForNodeDisplay(currentContent);
+                    // Should not happen given the structure, but fallback
+                    const nodeContent = tree.getContent(currentContent, node.hash);
+                    return formatTextForNodeDisplay(nodeContent);
                 }
                 
-                const parentContent = tree.getContent(parentHash);
-                const currentContent = tree.getContent(node.hash);
+                const parentContent = tree.getContent(currentContent, parentHash);
+                const nodeContent = tree.getContent(currentContent, node.hash);
                 
                 // Use generateDiffSummary which now has unified formatting
-                return generateDiffSummary(parentContent, currentContent);
+                return generateDiffSummary(parentContent, nodeContent);
                 
             } catch {
                 return "Parse error";
@@ -406,6 +460,30 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
             if (!isPanelValid(panel)) {
                 outputChannel.appendLine(`CtrlZTree: Skipping update to disposed webview for ${documentUriString}`);
                 return;
+            }
+
+            // We need the current content to reconstruct nodes
+            // Try to get it from lastKnownContent or active editor
+            let currentContent = lastKnownContent.get(documentUriString);
+            if (currentContent === undefined) {
+                // Fallback to active editor if available and matching
+                const editor = vscode.window.activeTextEditor;
+                if (editor && editor.document.uri.toString() === documentUriString) {
+                    currentContent = editor.document.getText();
+                    lastKnownContent.set(documentUriString, currentContent);
+                } else {
+                    // Try to find document in workspace
+                    const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === documentUriString);
+                    if (doc) {
+                        currentContent = doc.getText();
+                        lastKnownContent.set(documentUriString, currentContent);
+                    } else {
+                        // If we can't find content, we can't properly visualize diffs
+                        // But we can still show the tree structure
+                        currentContent = ""; 
+                        outputChannel.appendLine(`CtrlZTree: Warning - could not find content for ${documentUriString}, visualization may be incomplete`);
+                    }
+                }
             }
 
             const nodes = tree.getAllNodes();
@@ -422,7 +500,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                 currentFullHashMap.set(shortHash, fullHash);
                 
                 // Get added text preview for tooltip and label
-                const addedTextPreview = getAddedTextPreview(node, tree);
+                const addedTextPreview = getAddedTextPreview(node, tree, currentContent!);
                 
                 // Format timestamp as "time since now"
                 const timeAgo = formatTimeAgo(node.timestamp);
@@ -467,8 +545,11 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
             const key = document.uri.toString();
             if (!historyTrees.has(key)) {
                 outputChannel.appendLine(`CtrlZTree: Creating new tree for ${key}`);
-                const tree = new CtrlZTree(document.getText());
+                const content = document.getText();
+                const tree = new CtrlZTree(content);
                 historyTrees.set(key, tree);
+                // Initialize lastKnownContent
+                lastKnownContent.set(key, content);
             }
             return historyTrees.get(key)!;
         }
@@ -1026,12 +1107,18 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
     
             if (currentHeadFullHash) {
                 currentHeadShortHash = currentHeadFullHash.substring(0, 8);
-            }            nodes.forEach((node, fullHash) => {
+            }            const currentContent = documentToShow.getText();
+            // Initialize lastKnownContent if not present, to ensure consistency
+            if (!lastKnownContent.has(docUriString)) {
+                lastKnownContent.set(docUriString, currentContent);
+            }
+
+            nodes.forEach((node, fullHash) => {
                 const shortHash = fullHash.substring(0, 8);
                 initialFullHashMap.set(shortHash, fullHash);
                 
                 // Get added text preview for label and timestamp for tooltip
-                const addedTextPreview = getAddedTextPreview(node, tree);
+                const addedTextPreview = getAddedTextPreview(node, tree, currentContent);
                 const timeAgo = formatTimeAgo(node.timestamp);
                 
                 nodesArrayForVis.push({
@@ -1232,11 +1319,18 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                             }
                             
                             if (fullHash && targetTree) {
+                                // Capture old head before navigation
+                                const oldHead = targetTree.getHead();
+                                
                                 const success = targetTree.setHead(fullHash);
                                 if (success) {
                                     isApplyingEdit = true;
                                     try {
-                                        const content = targetTree.getContent();
+                                        // We need current content to reconstruct target content
+                                        // Since we are navigating, the current content is in the editor
+                                        const currentContent = targetEditor.document.getText();
+                                        // Pass oldHead as starting point
+                                        const content = targetTree.getContent(currentContent, fullHash, oldHead || undefined);
                                         const cursorPosition = targetTree.getCursorPosition();
                                         const edit = new vscode.WorkspaceEdit();
                                         
@@ -1256,6 +1350,9 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                                         if (!applyResult) {
                                             throw new Error('WorkspaceEdit was not applied successfully');
                                         }
+                                        
+                                        // Update lastKnownContent
+                                        lastKnownContent.set(docUriString, content);
                                         
                                         // Restore cursor position if available
                                         if (cursorPosition) {
@@ -1318,7 +1415,8 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                                     historyTrees.delete(docUriString);
                                     
                                     // Create a new tree with the current document content
-                                    const newTree = new CtrlZTree(targetDocument.getText());
+                                    const content = targetDocument.getText();
+                                    const newTree = new CtrlZTree(content);
                                     historyTrees.set(docUriString, newTree);
                                     
                                     // Get cursor position from active editor if it matches this document
@@ -1329,9 +1427,13 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                                     }
                                     
                                     // Set the current content as the initial state with cursor position
+                                    // Since it's a fresh tree, oldContent is same as newContent
                                     if (cursorPosition) {
-                                        newTree.set(targetDocument.getText(), cursorPosition);
+                                        newTree.set(content, content, cursorPosition);
                                     }
+                                    
+                                    // Initialize lastKnownContent
+                                    lastKnownContent.set(docUriString, content);
                                     
                                     // Clear tracking maps for this document to start fresh
                                     lastChangeTime.delete(docUriString);
@@ -1391,10 +1493,24 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                 processingDocuments.add(docUriString);
                 
                 const tree = getOrCreateTree(document);
-                const currentTreeContent = tree.getContent();
                 
-                // Only process if the document content actually differs from tree content
-                if (content !== currentTreeContent) {
+                // Get the old content (before this change)
+                // If we don't have it, we can't generate a diff!
+                // But if we just created the tree, lastKnownContent is set to current content (which is 'content')
+                // So we need to be careful.
+                // If lastKnownContent == content, then no change happened or we missed it.
+                
+                const oldContent = lastKnownContent.get(docUriString);
+                
+                if (oldContent === undefined) {
+                    // Should not happen if getOrCreateTree initializes it
+                    outputChannel.appendLine(`CtrlZTree: Error - no lastKnownContent for ${docUriString}`);
+                    lastKnownContent.set(docUriString, content);
+                    return;
+                }
+                
+                // Only process if the document content actually differs from old content
+                if (content !== oldContent) {
                     // Get cursor position from active editor if it matches this document
                     let cursorPosition: vscode.Position | undefined;
                     const editor = vscode.window.activeTextEditor;
@@ -1402,7 +1518,11 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                         cursorPosition = editor.selection.active;
                     }
                     
-                    tree.set(content, cursorPosition);
+                    tree.set(content, oldContent, cursorPosition);
+                    
+                    // Update lastKnownContent to the new content
+                    lastKnownContent.set(docUriString, content);
+                    
                     outputChannel.appendLine('CtrlZTree: Document changed and processed (debounced).');
                     
                     const panel = activeVisualizationPanels.get(docUriString);
@@ -1413,7 +1533,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                         outputChannel.appendLine(`CtrlZTree: No panel open for ${docUriString} on file change.`);
                     }
                 } else {
-                    outputChannel.appendLine('CtrlZTree: Document content matches tree content - skipping update.');
+                    outputChannel.appendLine('CtrlZTree: Document content matches last known content - skipping update.');
                 }
             } catch (e: any) {
                 outputChannel.appendLine(`CtrlZTree: Error in processDocumentChange: ${e.message} Stack: ${e.stack}`);
@@ -1425,7 +1545,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
         }
 
         // Process document changes with action-based grouping for better undo granularity
-        const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async event => {
+        const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(async (event: vscode.TextDocumentChangeEvent) => {
             if (isApplyingEdit) { 
                 outputChannel.appendLine('CtrlZTree: onDidChangeTextDocument - skipping due to isApplyingEdit.');
                 return; 
@@ -1460,8 +1580,16 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                 
                 // Determine change type and whether to group
                 const tree = getOrCreateTree(event.document);
-                const lastContent = tree.getContent();
-                const changeType = detectChangeType(lastContent, currentText);
+                
+                // Use lastKnownContent as the "old" content
+                // If not set, initialize it (should be handled by getOrCreateTree, but safe check)
+                let lastContent = lastKnownContent.get(docUriString);
+                if (lastContent === undefined) {
+                    lastContent = currentText; // First time seeing it?
+                    lastKnownContent.set(docUriString, currentText);
+                }
+                
+                const changeType = detectChangeType(lastContent!, currentText);
                 
                 const shouldGroup = currentPosition ? 
                     shouldGroupWithPreviousChange(docUriString, currentText, currentPosition, changeType) : 
@@ -1520,7 +1648,7 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
         });
         
         // Listen for active editor changes to update tree view
-        const activeEditorChangeSubscription = vscode.window.onDidChangeActiveTextEditor((editor) => {
+        const activeEditorChangeSubscription = vscode.window.onDidChangeActiveTextEditor((editor: vscode.TextEditor | undefined) => {
             if (!editor) {
                 outputChannel.appendLine('CtrlZTree: Active editor changed to none.');
                 return;
@@ -1608,9 +1736,12 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
             const currentContent = document.getText();
             let newHead: string | null;
             
+            // Capture the current head before undoing
+            const oldHead = tree.getHead();
+            
             if (currentContent.trim() === '') {
                 // File is empty, try to go to latest non-empty state
-                newHead = tree.zToLatestNonEmpty();
+                newHead = tree.zToLatestNonEmpty(currentContent);
                 if (newHead) {
                     outputChannel.appendLine('CtrlZTree: File is empty, jumping to latest non-empty state.');
                 } else {
@@ -1625,7 +1756,8 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
             if (newHead) {
                 isApplyingEdit = true;
                 try {
-                    const content = tree.getContent();
+                    // Pass oldHead as the starting point for reconstruction
+                    const content = tree.getContent(currentContent, newHead, oldHead || undefined);
                     const cursorPosition = tree.getCursorPosition();
                     
                     const edit = new vscode.WorkspaceEdit();
@@ -1635,6 +1767,9 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                         content
                     );
                     await vscode.workspace.applyEdit(edit);
+                    
+                    // Update lastKnownContent to the new content (after undo)
+                    lastKnownContent.set(document.uri.toString(), content);
                     
                     // Restore cursor position if available
                     if (cursorPosition) {
@@ -1676,12 +1811,17 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
             const document = editor.document;
             const tree = getOrCreateTree(document);
             
+            // Capture old head before redo
+            const oldHead = tree.getHead();
+            
             const result = tree.y();
+            const currentContent = document.getText();
             
             if (typeof result === 'string') { // Single new head
                 isApplyingEdit = true;
                 try {
-                    const content = tree.getContent(); 
+                    // Pass oldHead as starting point
+                    const content = tree.getContent(currentContent, result, oldHead || undefined); 
                     const cursorPosition = tree.getCursorPosition();
                     
                     const edit = new vscode.WorkspaceEdit();
@@ -1691,6 +1831,9 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                         content
                     );
                     await vscode.workspace.applyEdit(edit);
+                    
+                    // Update lastKnownContent
+                    lastKnownContent.set(document.uri.toString(), content);
                     
                     // Restore cursor position if available
                     if (cursorPosition) {
@@ -1720,8 +1863,11 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                 outputChannel.appendLine(`CtrlZTree: Ambiguous redo. Options: ${result.join(', ')}`);
                 const items = result.map(hash => {
                     // Get git-style diff preview for branch selection
-                    const currentContent = tree.getContent(); // Current state
-                    const branchContent = tree.getContent(hash); // Target branch state
+                    // currentContent is already defined above
+                    // For preview, we want to see what changes if we go to 'hash' from 'oldHead'
+                    // But getContent(currentContent, hash, oldHead) gives the full content of 'hash'
+                    // We need to pass oldHead because currentContent corresponds to oldHead
+                    const branchContent = tree.getContent(currentContent, hash, oldHead || undefined); // Target branch state
                     const diffPreview = generateDiffSummary(currentContent, branchContent);
                     
                     return {
@@ -1739,7 +1885,8 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                     tree.setHead(selected.hash);
                     isApplyingEdit = true;
                     try {
-                        const content = tree.getContent(); // Content of newly selected head
+                        // Pass oldHead as starting point
+                        const content = tree.getContent(currentContent, selected.hash, oldHead || undefined); // Content of newly selected head
                         const cursorPosition = tree.getCursorPosition();
                         
                         const edit = new vscode.WorkspaceEdit();
@@ -1749,6 +1896,9 @@ const DIFF_SCHEME = 'ctrlztree-diff';export function activate(context: vscode.Ex
                             content
                         );
                         await vscode.workspace.applyEdit(edit);
+                        
+                        // Update lastKnownContent
+                        lastKnownContent.set(document.uri.toString(), content);
                         
                         // Restore cursor position if available
                         if (cursorPosition) {

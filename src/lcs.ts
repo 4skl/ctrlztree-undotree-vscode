@@ -3,7 +3,7 @@ export interface DiffOperation {
     type: 'keep' | 'add' | 'remove';
     position: number;
     length?: number; // For 'keep' and 'remove' operations
-    content?: string; // Only for 'add' operations
+    content?: string; // For 'add' and 'remove' operations (to support reversibility)
 }
 
 export function generateDiff(input1: string, input2: string): DiffOperation[] {
@@ -56,10 +56,12 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
             
             // Characters from input1[original_i...nextMatchI-1] are removed
             if (nextMatchI > original_i) {
+                const contentToRemove = input1.slice(original_i, nextMatchI);
                 operations.push({
                     type: 'remove',
                     position: original_i,
-                    length: nextMatchI - original_i
+                    length: nextMatchI - original_i,
+                    content: contentToRemove // Store content for reversibility
                 });
             }
             
@@ -103,10 +105,12 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
             
             // Characters from input1[original_i...nextMatchI-1] are removed
             if (nextMatchI > original_i) {
+                const contentToRemove = input1.slice(original_i, nextMatchI);
                 operations.push({
                     type: 'remove',
                     position: original_i,
-                    length: nextMatchI - original_i
+                    length: nextMatchI - original_i,
+                    content: contentToRemove // Store content for reversibility
                 });
             }
             
@@ -128,6 +132,28 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
     }
     
     return operations;
+}
+
+export function reverseDiff(operations: DiffOperation[]): DiffOperation[] {
+    return operations.map(op => {
+        if (op.type === 'keep') {
+            return { ...op };
+        } else if (op.type === 'add') {
+            return {
+                type: 'remove',
+                position: op.position,
+                length: op.content ? op.content.length : 0,
+                content: op.content
+            };
+        } else if (op.type === 'remove') {
+            return {
+                type: 'add',
+                position: op.position,
+                content: op.content
+            };
+        }
+        return op;
+    });
 }
 
 export function applyDiff(originalContent: string, operations: DiffOperation[]): string {
