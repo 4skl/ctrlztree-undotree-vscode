@@ -318,6 +318,15 @@ export function createWebviewManager({
                         outputChannel.appendLine(`CtrlZTree: Webview CRITICAL ERROR: ${message.error.message} Stack: ${message.error.stack}`);
                         vscode.window.showErrorMessage(`CtrlZTree Webview Critical Error: ${message.error.message}. Check CtrlZTree output channel.`);
                         return;
+                    case 'dbgCoords':
+                        try {
+                            const d = message.data || {};
+                            const msg = `CtrlZTree dbgCoords: node=${d.selectedNodeId} pos=${JSON.stringify(d.position)} dom=${JSON.stringify(d.domPosition)} scroll=(${d.scrollX},${d.scrollY}) left=${d.left} top=${d.top} clampedLeft=${d.clampedLeft} clampedTop=${d.clampedTop} view=${JSON.stringify(d.viewport)}`;
+                            outputChannel.appendLine(msg);
+                        } catch (e) {
+                            outputChannel.appendLine(`CtrlZTree dbgCoords: failed to serialize debug message: ${e}`);
+                        }
+                        return;
                 }
             },
             undefined,

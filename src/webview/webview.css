@@ -74,7 +74,7 @@ body {
     font-family: var(--vscode-font-family);
     cursor: pointer;
     white-space: nowrap;
-    z-index: 1000;
+    z-index: 10000;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     transition: background-color 0.15s ease;
 }

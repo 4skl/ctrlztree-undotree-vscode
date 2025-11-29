@@ -5,6 +5,7 @@
         let nodes = new vis.DataSet([]);
         let edges = new vis.DataSet([]);
         let currentHeadNodeId = null;
+        let currentSelectedNodeId = null;
         const container = document.getElementById('tree-visualization');
         const reloadBtn = document.getElementById('reload-btn');
         if (reloadBtn) {
@@ -42,6 +43,19 @@
             }
         };
         network = new vis.Network(container, { nodes, edges }, options);
+
+        // Place the diff button on the document body so positioning uses
+        // `canvasToDOM` coordinates directly (document-relative). This is
+        // more robust across canvas transforms and ensures the button
+        // visually aligns with nodes.
+        try {
+            if (diffButton) {
+                diffButton.style.position = 'absolute';
+                document.body.appendChild(diffButton);
+            }
+        } catch (e) {
+            // ignore errors while re-parenting button
+        }
 
         // Helper to read CSS variables (fallback to provided default)
         function getCssVar(varName, fallback) {
@@ -114,6 +128,52 @@
                 // ignore malformed initial data
             }
         }
+        function updateDiffButtonPosition(selectedNodeId) {
+            try {
+                if (!diffButton || !network || !selectedNodeId) return;
+                const node = nodes.get(selectedNodeId);
+                if (!node || !node.hasParent) {
+                    diffButton.style.display = 'none';
+                    return;
+                }
+                const position = network.getPositions([selectedNodeId])[selectedNodeId];
+                if (!position) return;
+                const domPosition = network.canvasToDOM({ x: position.x, y: position.y });
+                const scale = (typeof network.getScale === 'function') ? network.getScale() : 1;
+                const left = domPosition.x - diffButton.offsetWidth / 2 + window.scrollX;
+                // Adjust the vertical offset by the current zoom scale so the
+                // button remains visually positioned under the node when zooming.
+                const verticalOffset = 30 * scale;
+                const top = domPosition.y + verticalOffset + window.scrollY;
+                const clampedLeft = Math.max(8 + window.scrollX, Math.min(left, window.scrollX + document.documentElement.clientWidth - diffButton.offsetWidth - 8));
+                const clampedTop = Math.max(8 + window.scrollY, Math.min(top, window.scrollY + document.documentElement.clientHeight - diffButton.offsetHeight - 8));
+                diffButton.style.left = `${clampedLeft}px`;
+                diffButton.style.top = `${clampedTop}px`;
+
+                // Post debug info for diagnostics (non-blocking)
+                try {
+                    vscode.postMessage({
+                        command: 'dbgCoords',
+                        data: {
+                            selectedNodeId,
+                            position: { x: position.x, y: position.y },
+                            domPosition: { x: domPosition.x, y: domPosition.y },
+                            left,
+                            top,
+                            clampedLeft,
+                            clampedTop
+                        }
+                    });
+                } catch (e) {
+                    // ignore
+                }
+
+                diffButton.style.display = 'block';
+            } catch (e) {
+                // ignore positioning errors
+            }
+        }
+
         network.on('selectNode', params => {
             if (params.nodes.length === 0) {
                 return;
@@ -123,19 +183,36 @@
             if (!node) {
                 return;
             }
-            if (node.hasParent) {
-                const position = network.getPositions([selectedNodeId])[selectedNodeId];
-                const domPosition = network.canvasToDOM({ x: position.x, y: position.y });
-                diffButton.style.left = `${domPosition.x - diffButton.offsetWidth / 2}px`;
-                diffButton.style.top = `${domPosition.y + 30}px`;
-                diffButton.style.display = 'block';
-                diffButton.onclick = () => {
-                    vscode.postMessage({ command: 'openDiff', shortHash: selectedNodeId });
-                };
-            } else {
-                diffButton.style.display = 'none';
+            currentSelectedNodeId = selectedNodeId;
+            updateDiffButtonPosition(selectedNodeId);
+            diffButton.onclick = () => {
+                vscode.postMessage({ command: 'openDiff', shortHash: selectedNodeId });
+            };
+        });
+        
+        // When the network is redrawn (panning/zooming/animation), keep the
+        // diff button anchored to the currently selected node.
+        network.on('afterDrawing', () => {
+            if (currentSelectedNodeId) {
+                updateDiffButtonPosition(currentSelectedNodeId);
             }
         });
+
+        // Reposition while zooming or after drag (pan) ends.
+        network.on('zoom', () => {
+            if (currentSelectedNodeId) updateDiffButtonPosition(currentSelectedNodeId);
+        });
+        network.on('dragEnd', () => {
+            if (currentSelectedNodeId) updateDiffButtonPosition(currentSelectedNodeId);
+        });
+
+        // Also update on window resize/scroll so the button stays aligned
+        window.addEventListener('resize', () => {
+            if (currentSelectedNodeId) updateDiffButtonPosition(currentSelectedNodeId);
+        });
+        window.addEventListener('scroll', () => {
+            if (currentSelectedNodeId) updateDiffButtonPosition(currentSelectedNodeId);
+        }, { passive: true });
         network.on('deselectNode', () => {
             diffButton.style.display = 'none';
         });
