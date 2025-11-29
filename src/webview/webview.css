@@ -6,6 +6,10 @@
     --vscode-border: var(--vscode-panel-border, #2d2d30);
     --vscode-hover: var(--vscode-list-hoverBackground, #2a2d2e);
 }
+html, body {
+    height: 100%;
+}
+
 body {
     background-color: var(--vscode-background);
     color: var(--vscode-foreground);
@@ -51,13 +55,15 @@ body {
 }
 #tree-visualization {
     width: 100%;
-    height: 100vh;
+    height: 100%;
     border: 1px solid var(--vscode-border);
     background-color: var(--vscode-background);
     position: relative;
+    box-sizing: border-box;
 }
 .vis-network canvas {
     background-color: var(--vscode-background) !important;
+    display: block;
 }
 .vis-network:hover {
     cursor: pointer !important;
