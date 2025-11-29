@@ -80,6 +80,29 @@
             font: '#ffffff'
         };
 
+        // Keep a small cache of original node styles so we can revert after hover
+        const originalNodeStyles = new Map();
+        // Remember the previously selected node while hovering so we can restore it
+        let hoverPreviousSelected = null;
+
+        // Prevent vis.js from changing node colors on hover/highlight by aligning
+        // the hover/highlight color with the default node colors. Then handle a
+        // subtle "scale" effect manually via font size + border width changes.
+        try {
+            if (network && typeof network.setOptions === 'function') {
+                network.setOptions({
+                    nodes: {
+                        color: {
+                            hover: { background: defaultNodeColors.background, border: defaultNodeColors.border },
+                            highlight: { background: defaultNodeColors.background, border: defaultNodeColors.border }
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            // ignore if setOptions fails for any reason
+        }
+
         function applyHeadStyle(headId) {
             try {
                 const all = nodes.get();
@@ -106,6 +129,64 @@
             } catch (e) {
                 // ignore styling errors
             }
+        }
+
+        // Hover handlers: create a subtle scale effect by increasing font size
+        // and border width slightly on hover, then revert on blur.
+        try {
+            network.on('hoverNode', params => {
+                try {
+                    const id = params.node;
+                    if (!id) return;
+                    const node = nodes.get(id);
+                    if (!node) return;
+
+                    if (!originalNodeStyles.has(id)) {
+                        originalNodeStyles.set(id, {
+                            fontSize: (node.font && node.font.size) || 14,
+                            borderWidth: node.borderWidth || 1
+                        });
+                    }
+
+                    const orig = originalNodeStyles.get(id);
+                    const increasedSize = Math.max(12, Math.round(orig.fontSize * 1.08));
+                    const increasedBorder = Math.max(1, orig.borderWidth + 1);
+
+                    nodes.update({ id, font: { ...(node.font || {}), size: increasedSize }, borderWidth: increasedBorder });
+                    // While hovering, temporarily treat this node as the selected node
+                    hoverPreviousSelected = currentSelectedNodeId;
+                    currentSelectedNodeId = id;
+                    // reposition diff button to stay aligned and keep it anchored during redraws
+                    updateDiffButtonPosition(currentSelectedNodeId);
+                } catch (e) {
+                    // ignore
+                }
+            });
+
+            network.on('blurNode', params => {
+                try {
+                    const id = params.node;
+                    if (!id) return;
+                    const orig = originalNodeStyles.get(id);
+                    if (!orig) return;
+                    const currentNode = nodes.get(id) || {};
+                    nodes.update({ id, font: { ...(currentNode.font || {}), size: orig.fontSize }, borderWidth: orig.borderWidth });
+                    originalNodeStyles.delete(id);
+                    // Restore previously selected node (if any) so anchoring continues
+                    currentSelectedNodeId = hoverPreviousSelected;
+                    hoverPreviousSelected = null;
+                    if (currentSelectedNodeId) {
+                        updateDiffButtonPosition(currentSelectedNodeId);
+                    } else {
+                        // hide button when nothing should be anchored
+                        try { diffButton.style.display = 'none'; } catch (e) {}
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            });
+        } catch (e) {
+            // ignore if network events are unavailable
         }
 
         // If the extension injected initial data into the template, use it to populate the view immediately
@@ -229,6 +310,8 @@
                     nodes.clear();
                     edges.clear();
                     nodes.add(message.nodes);
+                    // Clear any cached hover styles since node identities/styles changed
+                    try { originalNodeStyles.clear(); } catch (e) { /* ignore */ }
                     edges.add(message.edges);
                     currentHeadNodeId = message.headShortHash;
                     // Apply visual style to the current head node (and reset others)
