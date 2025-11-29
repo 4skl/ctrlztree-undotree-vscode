@@ -2,12 +2,9 @@
 import { generateDiffSummary } from './lcs';
 import { CtrlZTree } from './model/ctrlZTree';
 import { createExtensionState } from './state/extensionState';
-import { DIFF_SCHEME } from './constants';
+import { DIFF_SCHEME, ACTION_TIMEOUT, PAUSE_THRESHOLD } from './constants';
 import { createWebviewManager, WebviewManager } from './webview/webviewManager';
 import { registerDocumentChangeTracking } from './services/changeTracker';
-
-const ACTION_TIMEOUT = 500;
-const PAUSE_THRESHOLD = 1500;
 
 const extensionState = createExtensionState();
 

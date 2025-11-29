@@ -170,228 +170,30 @@ export function createWebviewManager({
         }
     }
 
-    function getWebviewContent(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null, webview: vscode.Webview, fileName: string): string {
-        const visNetworkUri = webview.asWebviewUri(vscode.Uri.joinPath(
-            context.extensionUri,
-            'resources',
-            'vis-network.min.js'
-        ));
+    async function getWebviewContent(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null, webview: vscode.Webview, fileName: string): Promise<string> {
+        const templateUri = vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.html');
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.css'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.js'));
+        const visNetworkUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'resources', 'vis-network.min.js'));
 
-        return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta http-equiv="Content-Security-Policy" 
-                      content="default-src 'none'; 
-                               script-src ${webview.cspSource} 'unsafe-inline'; 
-                               style-src ${webview.cspSource} 'unsafe-inline'; 
-                               font-src ${webview.cspSource}; 
-                               img-src ${webview.cspSource} data:;">
-                <title>CtrlZTree ${fileName}</title>
-                <script src="${visNetworkUri}"></script>
-                <style>${getStyles()}</style>
-            </head>
-            <body>
-                <div id="toolbar">
-                    <button id="reload-btn" class="toolbar-btn" title="Reload Tree Visualization">🔄 Reload</button>
-                    <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
-                </div>
-                <div id="tree-visualization"></div>
-                <button id="diff-button">📊 View Diff</button>
-                <script>${getWebviewScript(initialNodes, initialEdges, currentHeadShortHash)}</script>
-            </body>
-            </html>
-        `;
-    }
+        try {
+            const raw = await vscode.workspace.fs.readFile(templateUri);
+            const template = Buffer.from(raw).toString('utf8');
 
-    function getStyles(): string {
-        return `
-            :root {
-                --vscode-background: var(--vscode-editor-background, #1e1e1e);
-                --vscode-foreground: var(--vscode-editor-foreground, #d4d4d4);
-                --vscode-accent: var(--vscode-focusBorder, #007acc);
-                --vscode-current: var(--vscode-list-activeSelectionBackground, #094771);
-                --vscode-border: var(--vscode-panel-border, #2d2d30);
-                --vscode-hover: var(--vscode-list-hoverBackground, #2a2d2e);
-            }
-            body {
-                background-color: var(--vscode-background);
-                color: var(--vscode-foreground);
-                margin: 0;
-                padding: 0;
-                font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
-            }
-            #toolbar {
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                z-index: 1000;
-                background-color: var(--vscode-background);
-                border: 1px solid var(--vscode-border);
-                border-radius: 3px;
-                padding: 5px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-                display: flex;
-                gap: 5px;
-            }
-            .toolbar-btn {
-                background-color: var(--vscode-button-background, var(--vscode-accent));
-                color: var(--vscode-button-foreground, var(--vscode-foreground));
-                border: none;
-                border-radius: 2px;
-                padding: 6px 12px;
-                cursor: pointer;
-                font-size: 12px;
-                font-family: inherit;
-                transition: background-color 0.2s;
-            }
-            .toolbar-btn:hover {
-                background-color: var(--vscode-button-hoverBackground, var(--vscode-hover));
-            }
-            .toolbar-btn:active {
-                background-color: var(--vscode-button-secondaryBackground, var(--vscode-current));
-            }
-            #reset-btn {
-                background-color: var(--vscode-button-secondaryBackground, #5a5a5a);
-            }
-            #reset-btn:hover {
-                background-color: var(--vscode-errorBackground, #d73a49);
-            }
-            #tree-visualization {
-                width: 100%;
-                height: 100vh;
-                border: 1px solid var(--vscode-border);
-                background-color: var(--vscode-background);
-                position: relative;
-            }
-            .vis-network canvas {
-                background-color: var(--vscode-background) !important;
-            }
-            .vis-network:hover {
-                cursor: pointer !important;
-            }
-            #diff-button {
-                position: absolute;
-                display: none;
-                background-color: var(--vscode-button-background, #0e639c);
-                color: var(--vscode-button-foreground, #ffffff);
-                border: 1px solid var(--vscode-button-border, #0e639c);
-                border-radius: 3px;
-                padding: 4px 12px;
-                font-size: 11px;
-                font-family: var(--vscode-font-family);
-                cursor: pointer;
-                white-space: nowrap;
-                z-index: 1000;
-                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-                transition: background-color 0.15s ease;
-            }
-            #diff-button:hover {
-                background-color: var(--vscode-button-hoverBackground, #1177bb);
-            }
-            #diff-button:active {
-                background-color: var(--vscode-button-hoverBackground, #0d5a8f);
-                transform: translateY(1px);
-            }
-        `;
-    }
+            const filled = template
+                .replace(/%CSP_SOURCE%/g, webview.cspSource)
+                .replace(/%STYLE_URI%/g, String(styleUri))
+                .replace(/%SCRIPT_URI%/g, String(scriptUri))
+                .replace(/%VIS_NETWORK_URI%/g, String(visNetworkUri))
+                .replace(/%TITLE%/g, fileName);
 
-    function getWebviewScript(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null): string {
-        const currentHeadValue = currentHeadShortHash ? `'${currentHeadShortHash}'` : 'null';
-        return `
-            try {
-                const vscode = acquireVsCodeApi(); 
-                let network = null;
-                let nodes = new vis.DataSet(${JSON.stringify(initialNodes)});
-                let edges = new vis.DataSet(${JSON.stringify(initialEdges)});
-                let currentHeadNodeId = ${currentHeadValue};
-                const container = document.getElementById('tree-visualization');
-                const reloadBtn = document.getElementById('reload-btn');
-                if (reloadBtn) {
-                    reloadBtn.addEventListener('click', () => {
-                        vscode.postMessage({ command: 'requestTreeReload' });
-                    });
-                }
-                const resetBtn = document.getElementById('reset-btn');
-                if (resetBtn) {
-                    resetBtn.addEventListener('click', () => {
-                        vscode.postMessage({ command: 'requestTreeReset' });
-                    });
-                }
-                const diffButton = document.getElementById('diff-button');
-                const options = {
-                    layout: {
-                        hierarchical: {
-                            direction: 'UD',
-                            sortMethod: 'directed'
-                        }
-                    },
-                    nodes: {
-                        shape: 'box',
-                        margin: 10,
-                        widthConstraint: { maximum: 220 },
-                        font: { size: 14 }
-                    },
-                    edges: {
-                        arrows: 'to'
-                    },
-                    interaction: {
-                        hover: true,
-                        navigationButtons: true,
-                        keyboard: true
-                    }
-                };
-                network = new vis.Network(container, { nodes, edges }, options);
-                network.on('selectNode', params => {
-                    if (params.nodes.length === 0) {
-                        return;
-                    }
-                    const selectedNodeId = params.nodes[0];
-                    const node = nodes.get(selectedNodeId);
-                    if (!node) {
-                        return;
-                    }
-                    if (node.hasParent) {
-                        const position = network.getPositions([selectedNodeId])[selectedNodeId];
-                        const domPosition = network.canvasToDOM({ x: position.x, y: position.y });
-                        diffButton.style.left = \`\${domPosition.x - diffButton.offsetWidth / 2}px\`;
-                        diffButton.style.top = \`\${domPosition.y + 30}px\`;
-                        diffButton.style.display = 'block';
-                        diffButton.onclick = () => {
-                            vscode.postMessage({ command: 'openDiff', shortHash: selectedNodeId });
-                        };
-                    } else {
-                        diffButton.style.display = 'none';
-                    }
-                });
-                network.on('deselectNode', () => {
-                    diffButton.style.display = 'none';
-                });
-                network.on('click', params => {
-                    if (params.nodes.length === 0) {
-                        return;
-                    }
-                    vscode.postMessage({ command: 'navigateToNode', shortHash: params.nodes[0] });
-                });
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    switch (message.command) {
-                        case 'updateTree':
-                            nodes.clear();
-                            edges.clear();
-                            nodes.add(message.nodes);
-                            edges.add(message.edges);
-                            currentHeadNodeId = message.headShortHash;
-                            break;
-                        case 'updateTheme':
-                            break;
-                    }
-                });
-            } catch (error) {
-                vscode.postMessage({ command: 'webviewError', error: { message: error.message, stack: error.stack } });
-            }
-        `;
+            const startupDataScript = `\n<script>\nwindow.initialData = { nodes: ${JSON.stringify(initialNodes)}, edges: ${JSON.stringify(initialEdges)}, headShortHash: ${currentHeadShortHash ? `'${currentHeadShortHash}'` : 'null'} };\n</script>\n`;
+
+            return filled.replace('</head>', `</head>${startupDataScript}`);
+        } catch (e: any) {
+            outputChannel.appendLine(`CtrlZTree: Failed to load webview template: ${e.message}`);
+            return `<!doctype html><html><body><pre>Failed to load webview template: ${e.message}</pre></body></html>`;
+        }
     }
 
     function resetDocumentTracking(docUriString: string) {
@@ -439,7 +241,10 @@ export function createWebviewManager({
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'resources')],
+                localResourceRoots: [
+                    vscode.Uri.joinPath(context.extensionUri, 'resources'),
+                    vscode.Uri.joinPath(context.extensionUri, 'src', 'webview')
+                ],
                 retainContextWhenHidden: true
             }
         );
@@ -478,7 +283,7 @@ export function createWebviewManager({
             }
         });
         panelToFullHashMap.set(panel, initialFullHashMap);
-        panel.webview.html = getWebviewContent(nodesArrayForVis, edgesArrayForVis, currentHeadShortHash, panel.webview, fileName);
+        panel.webview.html = await getWebviewContent(nodesArrayForVis, edgesArrayForVis, currentHeadShortHash, panel.webview, fileName);
 
         panel.onDidChangeViewState(
             e => {
