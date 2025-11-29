@@ -67,6 +67,15 @@
             }
         }
 
+        // Helper to determine whether the webview is active/focused and visible
+        function isWebviewActive() {
+            try {
+                return document.hasFocus() && document.visibilityState === 'visible';
+            } catch (e) {
+                return false;
+            }
+        }
+
         // Determine default and active colors based on theme CSS variables
         const defaultNodeColors = {
             background: getCssVar('--vscode-background', '#1e1e1e'),
