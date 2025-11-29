@@ -82,8 +82,6 @@
 
         // Keep a small cache of original node styles so we can revert after hover
         const originalNodeStyles = new Map();
-        // Remember the previously selected node while hovering so we can restore it
-        let hoverPreviousSelected = null;
 
         // Prevent vis.js from changing node colors on hover/highlight by aligning
         // the hover/highlight color with the default node colors. Then handle a
@@ -153,11 +151,8 @@
                     const increasedBorder = Math.max(1, orig.borderWidth + 1);
 
                     nodes.update({ id, font: { ...(node.font || {}), size: increasedSize }, borderWidth: increasedBorder });
-                    // While hovering, temporarily treat this node as the selected node
-                    hoverPreviousSelected = currentSelectedNodeId;
-                    currentSelectedNodeId = id;
-                    // reposition diff button to stay aligned and keep it anchored during redraws
-                    updateDiffButtonPosition(currentSelectedNodeId);
+                    // Do NOT change selection or show the diff button on hover.
+                    // Hover only provides the subtle scale feedback.
                 } catch (e) {
                     // ignore
                 }
@@ -172,15 +167,10 @@
                     const currentNode = nodes.get(id) || {};
                     nodes.update({ id, font: { ...(currentNode.font || {}), size: orig.fontSize }, borderWidth: orig.borderWidth });
                     originalNodeStyles.delete(id);
-                    // Restore previously selected node (if any) so anchoring continues
-                    currentSelectedNodeId = hoverPreviousSelected;
-                    hoverPreviousSelected = null;
-                    if (currentSelectedNodeId) {
-                        updateDiffButtonPosition(currentSelectedNodeId);
-                    } else {
-                        // hide button when nothing should be anchored
-                        try { diffButton.style.display = 'none'; } catch (e) {}
-                    }
+                    // Reposition anchored button if there is an explicitly selected node
+                    try {
+                        if (currentSelectedNodeId) updateDiffButtonPosition(currentSelectedNodeId);
+                    } catch (e) { /* ignore */ }
                 } catch (e) {
                     // ignore
                 }
@@ -211,7 +201,11 @@
         }
         function updateDiffButtonPosition(selectedNodeId) {
             try {
-                if (!diffButton || !network || !selectedNodeId) return;
+                if (!diffButton || !network) return;
+                if (!selectedNodeId) {
+                    try { diffButton.style.display = 'none'; } catch (e) {}
+                    return;
+                }
                 const node = nodes.get(selectedNodeId);
                 if (!node || !node.hasParent) {
                     diffButton.style.display = 'none';
@@ -224,7 +218,8 @@
                 const left = domPosition.x - diffButton.offsetWidth / 2 + window.scrollX;
                 // Adjust the vertical offset by the current zoom scale so the
                 // button remains visually positioned under the node when zooming.
-                const verticalOffset = 30 * scale;
+                // Bump this value so the button appears below the node box.
+                const verticalOffset = 44 * scale;
                 const top = domPosition.y + verticalOffset + window.scrollY;
                 const clampedLeft = Math.max(8 + window.scrollX, Math.min(left, window.scrollX + document.documentElement.clientWidth - diffButton.offsetWidth - 8));
                 const clampedTop = Math.max(8 + window.scrollY, Math.min(top, window.scrollY + document.documentElement.clientHeight - diffButton.offsetHeight - 8));
