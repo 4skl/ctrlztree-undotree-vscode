@@ -93,13 +93,6 @@ We welcome contributions! This extension is under active development and there a
 - **Visualization**: Uses vis-network library for interactive graph rendering
 - **State Management**: Centralized tracking of document trees and visualization panels
 
-### File Structure
-```
-src/
-├── extension.ts    # Main extension logic and VS Code integration
-└── lcs.ts         # Diff algorithms and tree operations
-```
-
 ## 📖 References
 
 - [VS Code Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
