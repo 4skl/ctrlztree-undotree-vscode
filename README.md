@@ -129,7 +129,13 @@ Currently, CtrlZTree works out of the box with no configuration required. The ex
 
 ## 📊 Release Notes
 
-### 0.4.0 (Current)
+### 0.4.1 (Current)
+
+**Initial State Snapshot Fix:**
+- ✅ **Full First Node Content**: The very first node for every document now stores the complete file contents instead of appearing blank, so tooltips and labels immediately show meaningful text.
+- ✅ **Diff-Only Follow-up Nodes**: Subsequent nodes continue to store only their incremental diffs, keeping history size efficient.
+
+### 0.4.0
 
 **Floating Diff Button & Automatic Cleanup:**
 - ✅ **Floating HTML Button**: Styled button appears below the current active node for diff viewing

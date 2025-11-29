@@ -2,6 +2,14 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.4.1] - 2025-11-27
+
+### Fixed
+- **Accurate First Node Content**: The first recorded node for any document now stores the complete file contents instead of appearing as an empty placeholder, ensuring tooltips and node labels immediately show meaningful text even before subsequent edits.
+
+### Technical Details
+- Added snapshot storage for the very first node in each tree so later operations continue to store only diffs while the initial state remains a full-content entry.
+
 ## [0.4.0] - 2025-11-12
 
 ### Added
