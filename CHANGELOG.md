@@ -2,6 +2,24 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.0] - 2025-11-29
+
+### Fixed
+- **Webview Scrollbar**: Resolved an issue where the visualization panel displayed an unwanted vertical scrollbar by ensuring root/html heights are set and using `box-sizing: border-box` for the `#tree-visualization` container so borders don't cause a 1px overflow.
+
+### Changed
+- **Webview Styling**: Small CSS adjustments to the canvas and container (`display: block` on the canvas, `height: 100%` on the visualization) to improve layout stability and diff-button anchoring across themes and zoom levels.
+
+- **Project files updated**: Adjusted project files and documentation (package, README, changelog, and webview assets) for better project management and clarity.
+
+## [0.4.1] - 2025-11-27
+
+### Fixed
+- **Accurate First Node Content**: The first recorded node for any document now stores the complete file contents instead of appearing as an empty placeholder, ensuring tooltips and node labels immediately show meaningful text even before subsequent edits.
+
+### Technical Details
+- Added snapshot storage for the very first node in each tree so later operations continue to store only diffs while the initial state remains a full-content entry.
+
 ## [0.4.0] - 2025-11-12
 
 ### Added

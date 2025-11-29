@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src %CSP_SOURCE%; style-src %CSP_SOURCE% 'unsafe-inline'; font-src %CSP_SOURCE%; img-src %CSP_SOURCE% data:;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CtrlZTree %TITLE%</title>
+    <link rel="stylesheet" href="%STYLE_URI%">
+    <script src="%VIS_NETWORK_URI%"></script>
+</head>
+<body>
+    <div id="toolbar">
+        <button id="reload-btn" class="toolbar-btn" title="Reload Tree Visualization">🔄 Reload</button>
+        <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
+    </div>
+    <div id="tree-visualization">
+        <button id="diff-button">📊 View Diff</button>
+    </div>
+    <script src="%SCRIPT_URI%"></script>
+</body>
+</html>

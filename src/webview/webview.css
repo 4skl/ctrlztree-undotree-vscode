@@ -1,0 +1,93 @@
+:root {
+    --vscode-background: var(--vscode-editor-background, #1e1e1e);
+    --vscode-foreground: var(--vscode-editor-foreground, #d4d4d4);
+    --vscode-accent: var(--vscode-focusBorder, #007acc);
+    --vscode-current: var(--vscode-list-activeSelectionBackground, #094771);
+    --vscode-border: var(--vscode-panel-border, #2d2d30);
+    --vscode-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+}
+html, body {
+    height: 100%;
+}
+
+body {
+    background-color: var(--vscode-background);
+    color: var(--vscode-foreground);
+    margin: 0;
+    padding: 0;
+    font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+}
+#toolbar {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background-color: var(--vscode-background);
+    border: 1px solid var(--vscode-border);
+    border-radius: 3px;
+    padding: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 5px;
+}
+.toolbar-btn {
+    background-color: var(--vscode-button-background, var(--vscode-accent));
+    color: var(--vscode-button-foreground, var(--vscode-foreground));
+    border: none;
+    border-radius: 2px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    transition: background-color 0.2s;
+}
+.toolbar-btn:hover {
+    background-color: var(--vscode-button-hoverBackground, var(--vscode-hover));
+}
+.toolbar-btn:active {
+    background-color: var(--vscode-button-secondaryBackground, var(--vscode-current));
+}
+#reset-btn {
+    background-color: var(--vscode-button-secondaryBackground, #5a5a5a);
+}
+#reset-btn:hover {
+    background-color: var(--vscode-errorBackground, #d73a49);
+}
+#tree-visualization {
+    width: 100%;
+    height: 100%;
+    border: 1px solid var(--vscode-border);
+    background-color: var(--vscode-background);
+    position: relative;
+    box-sizing: border-box;
+}
+.vis-network canvas {
+    background-color: var(--vscode-background) !important;
+    display: block;
+}
+.vis-network:hover {
+    cursor: pointer !important;
+}
+#diff-button {
+    position: absolute;
+    display: none;
+    background-color: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #ffffff);
+    border: 1px solid var(--vscode-button-border, #0e639c);
+    border-radius: 3px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-family: var(--vscode-font-family);
+    cursor: pointer;
+    white-space: nowrap;
+    z-index: 10000;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.15s ease;
+}
+#diff-button:hover {
+    background-color: var(--vscode-button-hoverBackground, #1177bb);
+}
+#diff-button:active {
+    background-color: var(--vscode-button-hoverBackground, #0d5a8f);
+    transform: translateY(1px);
+}
