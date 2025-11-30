@@ -2,6 +2,11 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.1] - 2025-11-30
+
+### Fixed
+- **Missing Webview Assets in VSIX**: Updated packaging configuration (`.vscodeignore`) so the HTML/CSS/JS templates under `src/webview/` are shipped inside the published extension. This resolves ENOENT errors when the visualization webview tries to load its template in production installs.
+
 ## [0.5.0] - 2025-11-29
 
 ### Fixed

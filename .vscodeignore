@@ -5,6 +5,7 @@ node_modules/
 .vscode/**
 .vscode-test/**
 src/**
+!src/webview/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md

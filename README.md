@@ -70,6 +70,7 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 7. **Diff button** appears below the current active node (if it has a parent)
 For full release notes see [CHANGELOG.md](CHANGELOG.md). Recent highlights:
 
+- **0.5.1 (2025-11-30)** — Packaging fix ensures webview HTML/CSS/JS ship inside the VSIX.
 - **0.5.0 (2025-11-29)** — Webview layout & styling fixes; project files updated for better project management.
 - **0.4.1** — First-node snapshot fix (initial node stores full content).
 - **0.4.0** — Floating diff button and automatic cleanup; improved diff UX.
