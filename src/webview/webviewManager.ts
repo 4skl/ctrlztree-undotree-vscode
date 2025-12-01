@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { generateDiffSummary } from '../lcs';
+import { generateDiffSummary, deserializeDiff, DiffOperation } from '../lcs';
 import { CtrlZTree, TreeNode } from '../model/ctrlZTree';
 import { ExtensionState } from '../state/extensionState';
 import { DIFF_SCHEME } from '../constants';
@@ -83,28 +83,103 @@ export function createWebviewManager({
         return cleanText;
     }
 
-    function getAddedTextPreview(node: TreeNode, tree: CtrlZTree): string {
+    function truncateInlineText(text: string, maxLength: number): string {
+        const clean = text.replace(/\s+/g, ' ').trim();
+        if (!clean) {
+            return 'Empty';
+        }
+        if (clean.length <= maxLength) {
+            return clean;
+        }
+        return clean.substring(0, Math.max(0, maxLength - 3)) + '...';
+    }
+
+    function formatSegmentCollection(segments: string[], prefix: string): { label: string; tooltip: string } {
+        if (segments.length === 0) {
+            return { label: '', tooltip: '' };
+        }
+
+        const cleaned = segments.map(segment => segment.replace(/\s+/g, ' ').trim()).filter(Boolean);
+        if (cleaned.length === 0) {
+            return { label: '', tooltip: '' };
+        }
+
+        const labelSegment = truncateInlineText(cleaned[0], 70);
+        const tooltipSegments: string[] = [];
+        const maxTooltipSegments = 4;
+
+        for (let i = 0; i < cleaned.length && i < maxTooltipSegments; i++) {
+            tooltipSegments.push(`${prefix} ${truncateInlineText(cleaned[i], 160)}`);
+        }
+
+        if (cleaned.length > maxTooltipSegments) {
+            tooltipSegments.push(`${prefix} (+${cleaned.length - maxTooltipSegments} more)`);
+        }
+
+        return {
+            label: `${prefix} ${labelSegment}`,
+            tooltip: tooltipSegments.join('\n')
+        };
+    }
+
+    function extractSegmentsFromDiff(diffStr: string, parentContent: string): { additions: string[]; removals: string[] } {
+        const additions: string[] = [];
+        const removals: string[] = [];
+
+        let operations: DiffOperation[] = [];
         try {
-            if (node.fullContent !== undefined) {
-                return formatTextForNodeDisplay(node.fullContent);
-            }
+            operations = deserializeDiff(diffStr);
+        } catch {
+            return { additions, removals };
+        }
 
+        for (const op of operations) {
+            if (op.type === 'add' && typeof op.content === 'string') {
+                additions.push(op.content);
+            } else if (op.type === 'remove' && typeof op.length === 'number') {
+                const position = typeof op.position === 'number' ? op.position : 0;
+                const start = Math.max(0, Math.min(parentContent.length, position));
+                const end = Math.max(start, Math.min(parentContent.length, start + op.length));
+                const removedText = parentContent.slice(start, end);
+                if (removedText) {
+                    removals.push(removedText);
+                }
+            }
+        }
+
+        return { additions, removals };
+    }
+
+    function getNodeDiffPreview(node: TreeNode, tree: CtrlZTree): { label: string; tooltip: string } {
+        try {
+            const currentContent = tree.getContent(node.hash);
             const parentHash = node.parent;
-            if (!parentHash) {
-                const currentContent = tree.getContent(node.hash);
-                return formatTextForNodeDisplay(currentContent);
-            }
 
-            if (!node.diff) {
-                return 'Initial commit';
+            if (!parentHash || !node.diff) {
+                const fallback = formatTextForNodeDisplay(currentContent);
+                return { label: fallback, tooltip: fallback };
             }
 
             const parentContent = tree.getContent(parentHash);
-            const currentContent = tree.getContent(node.hash);
+            const { additions, removals } = extractSegmentsFromDiff(node.diff, parentContent);
+            const addedPreview = formatSegmentCollection(additions, '+');
+            const removedPreview = formatSegmentCollection(removals, '-');
 
-            return generateDiffSummary(parentContent, currentContent);
+            const labelParts = [addedPreview.label, removedPreview.label].filter(Boolean);
+            const tooltipParts = [addedPreview.tooltip, removedPreview.tooltip].filter(Boolean);
+
+            if (labelParts.length === 0) {
+                const summary = generateDiffSummary(parentContent, currentContent);
+                return { label: summary, tooltip: summary };
+            }
+
+            return {
+                label: labelParts.join('\n'),
+                tooltip: tooltipParts.join('\n')
+            };
         } catch {
-            return 'Parse error';
+            const fallback = formatTextForNodeDisplay(tree.getContent(node.hash));
+            return { label: fallback, tooltip: fallback };
         }
     }
 
@@ -134,16 +209,18 @@ export function createWebviewManager({
             const shortHash = fullHash.substring(0, 8);
             currentFullHashMap.set(shortHash, fullHash);
 
-            const addedTextPreview = getAddedTextPreview(node, tree);
+            const diffPreview = getNodeDiffPreview(node, tree);
+            const previewLabel = diffPreview.label || 'No textual changes';
+            const previewTooltip = diffPreview.tooltip || previewLabel;
             const timeAgo = formatTimeAgo(node.timestamp);
             const hasParent = node.parent !== null;
 
             nodesArrayForVis.push({
                 id: shortHash,
-                label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
-                title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`,
+                label: `${timeAgo}\n${shortHash}\n${previewLabel}`,
+                title: `${timeAgo}\nHash: ${shortHash}\n${previewTooltip}`,
                 hasParent,
-                baseLabel: `${timeAgo}\n${shortHash}\n${addedTextPreview}`
+                baseLabel: `${timeAgo}\n${shortHash}\n${previewLabel}`
             });
 
             if (node.parent && node.parent !== internalRootHash) {
@@ -268,12 +345,14 @@ export function createWebviewManager({
             }
             const shortHash = fullHash.substring(0, 8);
             initialFullHashMap.set(shortHash, fullHash);
-            const addedTextPreview = getAddedTextPreview(node, tree);
+            const diffPreview = getNodeDiffPreview(node, tree);
+            const previewLabel = diffPreview.label || 'No textual changes';
+            const previewTooltip = diffPreview.tooltip || previewLabel;
             const timeAgo = formatTimeAgo(node.timestamp);
             nodesArrayForVis.push({
                 id: shortHash,
-                label: `${timeAgo}\n${shortHash}\n${addedTextPreview}`,
-                title: `${timeAgo}\nHash: ${shortHash}\n${addedTextPreview}`
+                label: `${timeAgo}\n${shortHash}\n${previewLabel}`,
+                title: `${timeAgo}\nHash: ${shortHash}\n${previewTooltip}`
             });
             if (node.parent && node.parent !== internalRootHash) {
                 edgesArrayForVis.push({

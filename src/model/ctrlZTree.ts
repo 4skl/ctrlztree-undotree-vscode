@@ -9,7 +9,6 @@ export interface TreeNode {
     diff: string | null;
     timestamp: number;
     cursorPosition?: vscode.Position;
-    fullContent?: string;
 }
 
 export class CtrlZTree {
@@ -17,10 +16,12 @@ export class CtrlZTree {
     private head: string | null;
     private readonly trueEmptyRootContent: string = '';
     private readonly trueEmptyRootHash: string;
+    private initialSnapshotHash: string | null;
 
     constructor(initialDocumentContent: string) {
         this.nodes = new Map<string, TreeNode>();
         this.trueEmptyRootHash = this.calculateHash(this.trueEmptyRootContent);
+        this.initialSnapshotHash = null;
 
         const trueEmptyRootNode: TreeNode = {
             hash: this.trueEmptyRootHash,
@@ -33,7 +34,8 @@ export class CtrlZTree {
         this.head = this.trueEmptyRootHash;
 
         if (initialDocumentContent !== this.trueEmptyRootContent) {
-            this.set(initialDocumentContent);
+            const initialHash = this.set(initialDocumentContent);
+            this.initialSnapshotHash = initialHash;
         }
     }
 
@@ -47,9 +49,7 @@ export class CtrlZTree {
 
         for (let i = path.length - 2; i >= 0; i--) {
             const node = this.nodes.get(path[i])!;
-            if (node.fullContent !== undefined) {
-                content = node.fullContent;
-            } else if (node.diff) {
+            if (node.diff) {
                 const diffOps = deserializeDiff(node.diff);
                 content = applyDiff(content, diffOps);
             }
@@ -82,7 +82,6 @@ export class CtrlZTree {
         }
 
         const currentContent = this.head ? this.reconstructContent(this.head) : this.trueEmptyRootContent;
-        const isFirstContentNode = this.nodes.size === 1 && this.head === this.trueEmptyRootHash;
 
         const diffOps = generateDiff(currentContent, content);
         const serializedDiff = serializeDiff(diffOps);
@@ -92,8 +91,7 @@ export class CtrlZTree {
             children: [],
             diff: serializedDiff,
             timestamp: Date.now(),
-            cursorPosition: cursorPosition,
-            fullContent: isFirstContentNode ? content : undefined
+            cursorPosition: cursorPosition
         };
 
         if (this.head) {
@@ -113,6 +111,13 @@ export class CtrlZTree {
 
         const currentNode = this.nodes.get(this.head)!;
         if (currentNode.parent) {
+            if (currentNode.parent === this.trueEmptyRootHash) {
+                if (this.initialSnapshotHash && currentNode.hash === this.initialSnapshotHash) {
+                    return null;
+                }
+                this.head = currentNode.parent;
+                return this.head;
+            }
             this.head = currentNode.parent;
             return this.head;
         }
