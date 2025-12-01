@@ -138,6 +138,31 @@
             }
         }
 
+        function focusHeadNode(headId) {
+            try {
+                if (!network || typeof network.selectNodes !== 'function') {
+                    return;
+                }
+
+                if (!headId) {
+                    currentSelectedNodeId = null;
+                    if (typeof network.unselectAll === 'function') {
+                        network.unselectAll();
+                    }
+                    if (diffButton) {
+                        diffButton.style.display = 'none';
+                    }
+                    return;
+                }
+
+                currentSelectedNodeId = headId;
+                network.selectNodes([headId]);
+                updateDiffButtonPosition(headId);
+            } catch (e) {
+                // ignore focus errors
+            }
+        }
+
         // Hover handlers: create a subtle scale effect by increasing font size
         // and border width slightly on hover, then revert on blur.
         try {
@@ -203,6 +228,7 @@
                 if (currentHeadNodeId) {
                     // Apply visual style to current head node
                     applyHeadStyle(currentHeadNodeId);
+                    focusHeadNode(currentHeadNodeId);
                 }
             } catch (err) {
                 // ignore malformed initial data
@@ -270,9 +296,11 @@
             }
             currentSelectedNodeId = selectedNodeId;
             updateDiffButtonPosition(selectedNodeId);
-            diffButton.onclick = () => {
-                vscode.postMessage({ command: 'openDiff', shortHash: selectedNodeId });
-            };
+            if (diffButton) {
+                diffButton.onclick = () => {
+                    vscode.postMessage({ command: 'openDiff', shortHash: selectedNodeId });
+                };
+            }
         });
         
         // When the network is redrawn (panning/zooming/animation), keep the
@@ -299,7 +327,10 @@
             if (currentSelectedNodeId) updateDiffButtonPosition(currentSelectedNodeId);
         }, { passive: true });
         network.on('deselectNode', () => {
-            diffButton.style.display = 'none';
+            currentSelectedNodeId = null;
+            if (diffButton) {
+                diffButton.style.display = 'none';
+            }
         });
         network.on('click', params => {
             if (params.nodes.length === 0) {
@@ -322,8 +353,10 @@
                     try {
                         if (currentHeadNodeId) {
                             applyHeadStyle(currentHeadNodeId);
+                            focusHeadNode(currentHeadNodeId);
                         } else {
                             applyHeadStyle(null);
+                            focusHeadNode(null);
                         }
                     } catch (e) {
                         // ignore styling errors

@@ -84,14 +84,78 @@ export function createWebviewManager({
     }
 
     function truncateInlineText(text: string, maxLength: number): string {
-        const clean = text.replace(/\s+/g, ' ').trim();
-        if (!clean) {
+        if (!text) {
             return 'Empty';
         }
-        if (clean.length <= maxLength) {
-            return clean;
+        if (text.length <= maxLength) {
+            return text;
         }
-        return clean.substring(0, Math.max(0, maxLength - 3)) + '...';
+        return text.substring(0, Math.max(0, maxLength - 3)) + '...';
+    }
+
+    function summarizeWhitespaceSegment(segment: string): string {
+        if (!segment) {
+            return 'whitespace';
+        }
+
+        const parts: string[] = [];
+        const spaceCount = (segment.match(/ /g) || []).length;
+        if (spaceCount) {
+            parts.push(`spaces x${spaceCount}`);
+        }
+
+        const tabCount = (segment.match(/\t/g) || []).length;
+        if (tabCount) {
+            parts.push(`tabs x${tabCount}`);
+        }
+
+        const segmentWithoutCRLF = segment.replace(/\r\n/g, '');
+        const crlfCount = (segment.match(/\r\n/g) || []).length;
+        if (crlfCount) {
+            parts.push(`CRLF x${crlfCount}`);
+        }
+
+        const newlineCount = (segmentWithoutCRLF.match(/\n/g) || []).length;
+        if (newlineCount) {
+            parts.push(`LF x${newlineCount}`);
+        }
+
+        const carriageCount = (segmentWithoutCRLF.match(/\r/g) || []).length;
+        if (carriageCount) {
+            parts.push(`CR x${carriageCount}`);
+        }
+
+        return parts.length ? `whitespace (${parts.join(', ')})` : 'whitespace';
+    }
+
+    function annotateInlineWhitespace(segment: string): string {
+        return segment
+            .replace(/\r\n/g, '<CRLF>')
+            .replace(/\r/g, '<CR>')
+            .replace(/\n/g, '<LF>')
+            .replace(/\t/g, '<TAB>')
+            .replace(/ {2,}/g, match => `<SPx${match.length}>`);
+    }
+
+    function formatSegmentText(segment: string): { short: string; long: string } | null {
+        if (!segment) {
+            return null;
+        }
+
+        const hasVisibleCharacters = /[^\s]/.test(segment);
+        if (!hasVisibleCharacters) {
+            const summary = summarizeWhitespaceSegment(segment);
+            return { short: summary, long: summary };
+        }
+
+        const annotated = annotateInlineWhitespace(segment);
+        const needsQuotes = /^\s/.test(segment) || /\s$/.test(segment);
+        const normalized = needsQuotes ? `"${annotated}"` : annotated;
+
+        return {
+            short: truncateInlineText(normalized, 70),
+            long: truncateInlineText(normalized, 160)
+        };
     }
 
     function formatSegmentCollection(segments: string[], prefix: string): { label: string; tooltip: string } {
@@ -99,21 +163,24 @@ export function createWebviewManager({
             return { label: '', tooltip: '' };
         }
 
-        const cleaned = segments.map(segment => segment.replace(/\s+/g, ' ').trim()).filter(Boolean);
-        if (cleaned.length === 0) {
+        const described = segments
+            .map(segment => formatSegmentText(segment))
+            .filter((item): item is { short: string; long: string } => Boolean(item));
+
+        if (described.length === 0) {
             return { label: '', tooltip: '' };
         }
 
-        const labelSegment = truncateInlineText(cleaned[0], 70);
+        const labelSegment = described[0].short;
         const tooltipSegments: string[] = [];
         const maxTooltipSegments = 4;
 
-        for (let i = 0; i < cleaned.length && i < maxTooltipSegments; i++) {
-            tooltipSegments.push(`${prefix} ${truncateInlineText(cleaned[i], 160)}`);
+        for (let i = 0; i < described.length && i < maxTooltipSegments; i++) {
+            tooltipSegments.push(`${prefix} ${described[i].long}`);
         }
 
-        if (cleaned.length > maxTooltipSegments) {
-            tooltipSegments.push(`${prefix} (+${cleaned.length - maxTooltipSegments} more)`);
+        if (described.length > maxTooltipSegments) {
+            tooltipSegments.push(`${prefix} (+${described.length - maxTooltipSegments} more)`);
         }
 
         return {

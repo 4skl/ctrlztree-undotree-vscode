@@ -66,6 +66,7 @@ export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.
         const lastContent = tree.getContent();
         const changeType = detectChangeType(lastContent, currentText);
         const shouldGroup = currentPosition ? shouldGroupWithPreviousChange(state, docUriString, currentPosition, changeType, pauseThreshold) : false;
+        const shouldFlushOnSeparator = changeIncludesWordSeparator(event.contentChanges);
 
         lastChangeTime.set(docUriString, Date.now());
         if (currentPosition) {
@@ -77,6 +78,13 @@ export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.
         const existingTimeout = documentChangeTimeouts.get(docUriString);
         if (existingTimeout) {
             clearTimeout(existingTimeout);
+            documentChangeTimeouts.delete(docUriString);
+        }
+
+        if (shouldFlushOnSeparator) {
+            processDocumentChange(event.document, currentText);
+            outputChannel.appendLine(`CtrlZTree: Document change flushed immediately due to separator for ${docUriString}.`);
+            return;
         }
 
         const delay = shouldGroup ? actionTimeout : 50;
@@ -89,7 +97,7 @@ export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.
         }, delay);
 
         documentChangeTimeouts.set(docUriString, newTimeout);
-        outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, delay: ${delay}ms, type: ${changeType}, cursor: ${currentPosition?.line}:${currentPosition?.character})`);
+        outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, separatorFlush: ${shouldFlushOnSeparator}, delay: ${delay}ms, type: ${changeType}, cursor: ${currentPosition?.line}:${currentPosition?.character})`);
     });
 
     context.subscriptions.push(subscription);
@@ -193,4 +201,19 @@ function detectChangeType(oldContent: string, newContent: string): ChangeType {
         return 'deletion';
     }
     return oldContent === newContent ? 'other' : 'typing';
+}
+
+function changeIncludesWordSeparator(changes: readonly vscode.TextDocumentContentChangeEvent[]): boolean {
+    for (const change of changes) {
+        if (!change.text) {
+            continue;
+        }
+        if (change.text.trim() !== '') {
+            continue;
+        }
+        if (/[ \t\r\n]/.test(change.text)) {
+            return true;
+        }
+    }
+    return false;
 }
