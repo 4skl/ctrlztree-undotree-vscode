@@ -16,6 +16,8 @@ interface ChangeTrackerDeps {
     pauseThreshold: number;
 }
 
+const WHITESPACE_FLUSH_DELAY = 500; // 500 ms
+
 export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.Disposable {
     const {
         context,
@@ -66,6 +68,7 @@ export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.
         const lastContent = tree.getContent();
         const changeType = detectChangeType(lastContent, currentText);
         const shouldGroup = currentPosition ? shouldGroupWithPreviousChange(state, docUriString, currentPosition, changeType, pauseThreshold) : false;
+        const separatorTrigger = detectSeparatorTrigger(event.contentChanges);
 
         lastChangeTime.set(docUriString, Date.now());
         if (currentPosition) {
@@ -77,9 +80,18 @@ export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.
         const existingTimeout = documentChangeTimeouts.get(docUriString);
         if (existingTimeout) {
             clearTimeout(existingTimeout);
+            documentChangeTimeouts.delete(docUriString);
         }
 
-        const delay = shouldGroup ? actionTimeout : 50;
+        if (separatorTrigger === 'newline') {
+            processDocumentChange(event.document, currentText);
+            outputChannel.appendLine(`CtrlZTree: Document change flushed immediately due to newline separator for ${docUriString}.`);
+            return;
+        }
+
+        const delay = separatorTrigger === 'whitespace'
+            ? WHITESPACE_FLUSH_DELAY
+            : shouldGroup ? actionTimeout : 50;
         const newTimeout = setTimeout(() => {
             const pendingContent = pendingChanges.get(docUriString);
             if (pendingContent !== undefined) {
@@ -89,7 +101,7 @@ export function registerDocumentChangeTracking(deps: ChangeTrackerDeps): vscode.
         }, delay);
 
         documentChangeTimeouts.set(docUriString, newTimeout);
-        outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, delay: ${delay}ms, type: ${changeType}, cursor: ${currentPosition?.line}:${currentPosition?.character})`);
+        outputChannel.appendLine(`CtrlZTree: Document change scheduled for ${docUriString} (group: ${shouldGroup}, separatorTrigger: ${separatorTrigger ?? 'none'}, delay: ${delay}ms, type: ${changeType}, cursor: ${currentPosition?.line}:${currentPosition?.character})`);
     });
 
     context.subscriptions.push(subscription);
@@ -193,4 +205,26 @@ function detectChangeType(oldContent: string, newContent: string): ChangeType {
         return 'deletion';
     }
     return oldContent === newContent ? 'other' : 'typing';
+}
+
+type SeparatorTrigger = 'newline' | 'whitespace';
+
+function detectSeparatorTrigger(changes: readonly vscode.TextDocumentContentChangeEvent[]): SeparatorTrigger | null {
+    let sawWhitespace = false;
+
+    for (const change of changes) {
+        if (!change.text) {
+            continue;
+        }
+
+        if (/\r|\n/.test(change.text)) {
+            return 'newline';
+        }
+
+        if (change.text.trim() === '') {
+            sawWhitespace = true;
+        }
+    }
+
+    return sawWhitespace ? 'whitespace' : null;
 }

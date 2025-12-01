@@ -2,6 +2,19 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.2] - 2025-12-01
+
+### Fixed
+- **Root State Undo**: Prevents Ctrl+Z on the very first node from wiping the file by pinning the initial snapshot and refusing to move past it when the document started non-empty.
+
+### Changed
+- **Lean Tree Storage**: Tree nodes now keep diffs only (with a single initial snapshot) which dramatically reduces memory churn when working on large files.
+- **Rich Node Labels**: Visualization nodes display explicit `+` / `-` segments (including whitespace markers such as `<TAB>` or `spaces x4`) and the selected head node now automatically follows the active document state.
+- **Whitespace-Aware Tracking**: Change tracking flushes immediately on newline inserts but batches runs of spaces/tabs for up to 500 ms so blank-character edits land in a single history entry instead of dozens.
+
+### Improved
+- **Diff Summaries**: Tooltips and quick-pick previews use the new diff extraction to highlight exactly what text was added or removed, including whitespace-only edits, for much clearer history browsing.
+
 ## [0.5.1] - 2025-11-30
 
 ### Fixed
