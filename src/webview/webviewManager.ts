@@ -27,6 +27,7 @@ export function createWebviewManager({
     setIsApplyingEdit
 }: ManagerDeps): WebviewManager {
     const { activeVisualizationPanels, panelToFullHashMap, historyTrees, lastChangeTime, lastCursorPosition, lastChangeType, pendingChanges, documentChangeTimeouts } = state;
+    const panelDocumentContexts = new Map<vscode.WebviewPanel, { docUriString: string; document: vscode.TextDocument }>();
 
     function formatTimeAgo(timestamp: number): string {
         const now = Date.now();
@@ -320,6 +321,17 @@ export function createWebviewManager({
         }
     }
 
+    function updatePanelDocumentContext(panel: vscode.WebviewPanel, document: vscode.TextDocument) {
+        panelDocumentContexts.set(panel, {
+            docUriString: document.uri.toString(),
+            document
+        });
+    }
+
+    function getPanelDocumentContext(panel: vscode.WebviewPanel) {
+        return panelDocumentContexts.get(panel);
+    }
+
     async function getWebviewContent(webview: vscode.Webview, fileName: string): Promise<string> {
         const templateUri = vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.html');
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.css'));
@@ -390,6 +402,7 @@ export function createWebviewManager({
         if (existingPanel && isPanelValid(existingPanel) && typeof existingPanel.reveal === 'function') {
             existingPanel.title = `CtrlZTree ${fileName}`;
             const tree = getOrCreateTree(editor);
+            updatePanelDocumentContext(existingPanel, editor);
             postUpdatesToWebview(existingPanel, tree, docUriString);
             existingPanel.reveal(vscode.ViewColumn.Beside, false);
             return;
@@ -414,10 +427,16 @@ export function createWebviewManager({
             }
         );
         activeVisualizationPanels.set(docUriString, panel);
+        updatePanelDocumentContext(panel, editor);
         panel.webview.html = await getWebviewContent(panel.webview, fileName);
 
         panel.onDidChangeViewState(
             e => {
+                const panelContext = getPanelDocumentContext(panel);
+                if (!panelContext) {
+                    return;
+                }
+                const { docUriString } = panelContext;
                 if (e.webviewPanel.visible) {
                     const currentTree = historyTrees.get(docUriString);
                     const currentPanel = activeVisualizationPanels.get(docUriString);
@@ -432,9 +451,15 @@ export function createWebviewManager({
 
         panel.webview.onDidReceiveMessage(
             async message => {
+                const panelContext = getPanelDocumentContext(panel);
+                if (!panelContext) {
+                    outputChannel.appendLine('CtrlZTree: No panel context available for message handling.');
+                    return;
+                }
+                const { docUriString, document: contextDocument } = panelContext;
                 switch (message.command) {
                     case 'webviewReady': {
-                        const currentTree = historyTrees.get(docUriString) ?? getOrCreateTree(editor);
+                        const currentTree = historyTrees.get(docUriString) ?? getOrCreateTree(contextDocument);
                         postUpdatesToWebview(panel, currentTree, docUriString);
                         return;
                     }
@@ -471,7 +496,11 @@ export function createWebviewManager({
 
         panel.onDidDispose(
             () => {
-                activeVisualizationPanels.delete(docUriString);
+                const panelContext = getPanelDocumentContext(panel);
+                if (panelContext) {
+                    activeVisualizationPanels.delete(panelContext.docUriString);
+                    panelDocumentContexts.delete(panel);
+                }
                 panelToFullHashMap.delete(panel);
             },
             null,
@@ -732,6 +761,7 @@ export function createWebviewManager({
             }
             existingPanel.title = `CtrlZTree ${fileName}`;
             const tree = getOrCreateTree(editor.document);
+            updatePanelDocumentContext(existingPanel, editor.document);
             postUpdatesToWebview(existingPanel, tree, docUriString);
             existingPanel.reveal(vscode.ViewColumn.Beside, false);
             return;
@@ -752,6 +782,7 @@ export function createWebviewManager({
                 postUpdatesToWebview(panel, tree, docUriString);
                 activeVisualizationPanels.delete(otherDocUri);
                 activeVisualizationPanels.set(docUriString, panel);
+                updatePanelDocumentContext(panel, editor.document);
                 return;
             } else if (!isPanelValid(panel)) {
                 activeVisualizationPanels.delete(otherDocUri);
