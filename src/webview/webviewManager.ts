@@ -258,6 +258,7 @@ export function createWebviewManager({
 
         const nodes = tree.getAllNodes();
         const internalRootHash = tree.getInternalRootHash();
+        const initialSnapshotHash = tree.getInitialSnapshotHash();
         const nodesArrayForVis: any[] = [];
         const edgesArrayForVis: any[] = [];
         const currentFullHashMap = new Map<string, string>();
@@ -269,14 +270,19 @@ export function createWebviewManager({
         }
 
         nodes.forEach((node, fullHash) => {
-            if (fullHash === internalRootHash) {
-                return;
-            }
-
             const shortHash = fullHash.substring(0, 8);
             currentFullHashMap.set(shortHash, fullHash);
 
-            const diffPreview = getNodeDiffPreview(node, tree);
+            const isInternalRoot = fullHash === internalRootHash;
+            const isInitialSnapshot = initialSnapshotHash !== null && fullHash === initialSnapshotHash;
+
+            const diffPreview = isInitialSnapshot
+                ? { label: 'Root (initial document state)', tooltip: 'Document content when CtrlZTree started tracking this file' }
+                : isInternalRoot
+                    ? initialSnapshotHash
+                        ? { label: 'Empty baseline', tooltip: 'CtrlZTree internal starting point' }
+                        : { label: 'Root (initial state)', tooltip: 'Starting point for this document' }
+                    : getNodeDiffPreview(node, tree);
             const previewLabel = diffPreview.label || 'No textual changes';
             const previewTooltip = diffPreview.tooltip || previewLabel;
             const timeAgo = formatTimeAgo(node.timestamp);
@@ -290,7 +296,7 @@ export function createWebviewManager({
                 baseLabel: `${timeAgo}\n${shortHash}\n${previewLabel}`
             });
 
-            if (node.parent && node.parent !== internalRootHash) {
+            if (node.parent) {
                 edgesArrayForVis.push({
                     from: node.parent.substring(0, 8),
                     to: shortHash

@@ -209,4 +209,8 @@ export class CtrlZTree {
     getInternalRootHash(): string {
         return this.trueEmptyRootHash;
     }
+
+    getInitialSnapshotHash(): string | null {
+        return this.initialSnapshotHash;
+    }
 }
