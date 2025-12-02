@@ -213,27 +213,7 @@
             // ignore if network events are unavailable
         }
 
-        // If the extension injected initial data into the template, use it to populate the view immediately
-        if (window.initialData) {
-            try {
-                if (Array.isArray(window.initialData.nodes) && window.initialData.nodes.length > 0) {
-                    nodes.clear();
-                    nodes.add(window.initialData.nodes);
-                }
-                if (Array.isArray(window.initialData.edges) && window.initialData.edges.length > 0) {
-                    edges.clear();
-                    edges.add(window.initialData.edges);
-                }
-                currentHeadNodeId = window.initialData.headShortHash || null;
-                if (currentHeadNodeId) {
-                    // Apply visual style to current head node
-                    applyHeadStyle(currentHeadNodeId);
-                    focusHeadNode(currentHeadNodeId);
-                }
-            } catch (err) {
-                // ignore malformed initial data
-            }
-        }
+        vscode.postMessage({ command: 'webviewReady' });
         function updateDiffButtonPosition(selectedNodeId) {
             try {
                 if (!diffButton || !network) return;
