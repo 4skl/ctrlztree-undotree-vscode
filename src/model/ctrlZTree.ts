@@ -16,12 +16,12 @@ export class CtrlZTree {
     private head: string | null;
     private readonly trueEmptyRootContent: string = '';
     private readonly trueEmptyRootHash: string;
-    private initialSnapshotHash: string | null;
+    private initialSnapshotHash?: string;
 
     constructor(initialDocumentContent: string) {
         this.nodes = new Map<string, TreeNode>();
         this.trueEmptyRootHash = this.calculateHash(this.trueEmptyRootContent);
-        this.initialSnapshotHash = null;
+        this.initialSnapshotHash = this.trueEmptyRootHash;
 
         const trueEmptyRootNode: TreeNode = {
             hash: this.trueEmptyRootHash,
@@ -111,13 +111,6 @@ export class CtrlZTree {
 
         const currentNode = this.nodes.get(this.head)!;
         if (currentNode.parent) {
-            if (currentNode.parent === this.trueEmptyRootHash) {
-                if (this.initialSnapshotHash && currentNode.hash === this.initialSnapshotHash) {
-                    return null;
-                }
-                this.head = currentNode.parent;
-                return this.head;
-            }
             this.head = currentNode.parent;
             return this.head;
         }
@@ -210,7 +203,7 @@ export class CtrlZTree {
         return this.trueEmptyRootHash;
     }
 
-    getInitialSnapshotHash(): string | null {
-        return this.initialSnapshotHash;
+    public getInitialSnapshotHash(): string {
+        return this.initialSnapshotHash ?? this.trueEmptyRootHash;
     }
 }
