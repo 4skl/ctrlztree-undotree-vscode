@@ -5,6 +5,7 @@ import { createExtensionState } from './state/extensionState';
 import { DIFF_SCHEME, ACTION_TIMEOUT, PAUSE_THRESHOLD } from './constants';
 import { createWebviewManager, WebviewManager } from './webview/webviewManager';
 import { registerDocumentChangeTracking } from './services/changeTracker';
+import { markEditorCleanIfAtInitialSnapshot } from './utils/editorState';
 
 const extensionState = createExtensionState();
 
@@ -100,6 +101,7 @@ export function activate(context: vscode.ExtensionContext) {
         }, () => {
             isApplyingEdit = false;
         });
+        await markEditorCleanIfAtInitialSnapshot(tree, document, { outputChannel });
         updatePanelForDocument(tree, document.uri.toString(), webviewManager);
     });
 
@@ -308,6 +310,7 @@ async function applyRedoBranch(
 ): Promise<void> {
     tree.setHead(targetHash);
     await applyTreeStateToDocument(document, tree, onStart, onEnd);
+    await markEditorCleanIfAtInitialSnapshot(tree, document);
     updatePanelForDocument(tree, document.uri.toString(), webviewManager);
 }
 

@@ -2,6 +2,20 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.3] - 2025-12-02
+
+### Added
+- **Automatic Document Resolution**: The `CtrlZTree: Visualize History Tree` command now resolves a document even when triggered before any editor is active, reopening the last valid file or waiting for VS Code to restore one when necessary.
+- **Root Visibility & Navigation**: Both the internal empty baseline and the first tracked snapshot are always rendered in the visualization, and undo can now walk all the way back to the empty baseline for true Vim-style history browsing.
+
+### Changed
+- **Smarter Panel Context**: Visualization panels keep track of which document they represent, so clicking nodes in a freshly retargeted panel no longer complains about missing hashes or jumps to the wrong file.
+- **Initial State Hygiene**: When a document returns to its initial tracked state (either via undo or by selecting the root node), the extension compares the on-disk file with that snapshot and, if they match, automatically clears the dirty indicator so the editor reflects reality.
+
+### Fixed
+- **Webview Bootstrap**: Removed CSP-incompatible inline data injection; the panel now waits for a `webviewReady` ping before streaming tree data, eliminating the need to hit the Reload button on startup.
+- **Root Node Fallbacks**: Visualization creation gracefully shows the root node even for brand-new empty files, ensuring the tree never appears blank.
+
 ## [0.5.2] - 2025-12-01
 
 ### Fixed

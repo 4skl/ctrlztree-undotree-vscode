@@ -3,6 +3,7 @@ import { generateDiffSummary, deserializeDiff, DiffOperation } from '../lcs';
 import { CtrlZTree, TreeNode } from '../model/ctrlZTree';
 import { ExtensionState } from '../state/extensionState';
 import { DIFF_SCHEME } from '../constants';
+import { markEditorCleanIfAtInitialSnapshot } from '../utils/editorState';
 
 interface ManagerDeps {
     context: vscode.ExtensionContext;
@@ -655,6 +656,11 @@ export function createWebviewManager({
                     targetEditor.selection = new vscode.Selection(adjustedPosition, adjustedPosition);
                     targetEditor.revealRange(new vscode.Range(adjustedPosition, adjustedPosition));
                 }
+
+                await markEditorCleanIfAtInitialSnapshot(targetTree, activeDoc, {
+                    targetHash: fullHash,
+                    outputChannel
+                });
             } catch (e: any) {
                 vscode.window.showErrorMessage(`CtrlZTree navigation error: ${e.message}`);
             } finally {
