@@ -155,8 +155,93 @@ export function activate(context: vscode.ExtensionContext) {
         });
     });
 
-    const visualizeCommand = vscode.commands.registerCommand('ctrlztree.visualize', async () => {
-        await webviewManager.showVisualizationForDocument();
+    async function resolveDocumentForVisualization(preferredDocument?: vscode.TextDocument): Promise<vscode.TextDocument | undefined> {
+        if (isTrackableDocument(preferredDocument)) {
+            return preferredDocument;
+        }
+
+        const activeDoc = vscode.window.activeTextEditor?.document;
+        if (isTrackableDocument(activeDoc)) {
+            return activeDoc;
+        }
+
+        const visibleEditor = vscode.window.visibleTextEditors.find(editor => isTrackableDocument(editor.document));
+        if (visibleEditor) {
+            return visibleEditor.document;
+        }
+
+        if (extensionState.lastValidEditorUri) {
+            const matchingDoc = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === extensionState.lastValidEditorUri);
+            if (isTrackableDocument(matchingDoc)) {
+                return matchingDoc;
+            }
+
+            try {
+                const reopened = await vscode.workspace.openTextDocument(vscode.Uri.parse(extensionState.lastValidEditorUri));
+                if (isTrackableDocument(reopened)) {
+                    return reopened;
+                }
+            } catch (error: any) {
+                outputChannel.appendLine(`CtrlZTree: Could not reopen last edited document ${extensionState.lastValidEditorUri}: ${error.message}`);
+            }
+        }
+
+        const workspaceDoc = vscode.workspace.textDocuments.find(isTrackableDocument);
+        if (workspaceDoc) {
+            return workspaceDoc;
+        }
+
+        return waitForNextTrackableEditor(2000);
+    }
+
+    function waitForNextTrackableEditor(timeoutMs: number): Promise<vscode.TextDocument | undefined> {
+        return new Promise(resolve => {
+            let settled = false;
+            let timer: NodeJS.Timeout | undefined;
+
+            const disposable = vscode.window.onDidChangeActiveTextEditor(editor => {
+                if (isTrackableDocument(editor?.document) && !settled) {
+                    settled = true;
+                    if (timer) {
+                        clearTimeout(timer);
+                    }
+                    disposable.dispose();
+                    resolve(editor!.document);
+                }
+            });
+
+            timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    disposable.dispose();
+                    resolve(undefined);
+                }
+            }, timeoutMs);
+        });
+    }
+
+    function isTrackableDocument(document: vscode.TextDocument | undefined): document is vscode.TextDocument {
+        return !!document && (document.uri.scheme === 'file' || document.uri.scheme === 'untitled');
+    }
+
+    const visualizeCommand = vscode.commands.registerCommand('ctrlztree.visualize', async (uri?: vscode.Uri) => {
+        let preferredDocument: vscode.TextDocument | undefined;
+
+        if (uri) {
+            try {
+                preferredDocument = await vscode.workspace.openTextDocument(uri);
+            } catch (error: any) {
+                outputChannel.appendLine(`CtrlZTree: Failed to open provided document for visualize command: ${error.message}`);
+            }
+        }
+
+        const targetDocument = await resolveDocumentForVisualization(preferredDocument);
+        if (!targetDocument) {
+            vscode.window.showInformationMessage('CtrlZTree: No active text document available to visualize yet.');
+            return;
+        }
+
+        await webviewManager.showVisualizationForDocument(targetDocument);
     });
 
     context.subscriptions.push(undoCommand, redoCommand, visualizeCommand);

@@ -314,7 +314,7 @@ export function createWebviewManager({
         }
     }
 
-    async function getWebviewContent(initialNodes: any[], initialEdges: any[], currentHeadShortHash: string | null, webview: vscode.Webview, fileName: string): Promise<string> {
+    async function getWebviewContent(webview: vscode.Webview, fileName: string): Promise<string> {
         const templateUri = vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.html');
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.css'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'src', 'webview', 'webview.js'));
@@ -330,10 +330,7 @@ export function createWebviewManager({
                 .replace(/%SCRIPT_URI%/g, String(scriptUri))
                 .replace(/%VIS_NETWORK_URI%/g, String(visNetworkUri))
                 .replace(/%TITLE%/g, fileName);
-
-            const startupDataScript = `\n<script>\nwindow.initialData = { nodes: ${JSON.stringify(initialNodes)}, edges: ${JSON.stringify(initialEdges)}, headShortHash: ${currentHeadShortHash ? `'${currentHeadShortHash}'` : 'null'} };\n</script>\n`;
-
-            return filled.replace('</head>', `</head>${startupDataScript}`);
+            return filled;
         } catch (e: any) {
             outputChannel.appendLine(`CtrlZTree: Failed to load webview template: ${e.message}`);
             return `<!doctype html><html><body><pre>Failed to load webview template: ${e.message}</pre></body></html>`;
@@ -353,12 +350,30 @@ export function createWebviewManager({
     }
 
     async function showVisualizationForDocument(documentToShow?: vscode.TextDocument) {
-        const editor = documentToShow ?? vscode.window.activeTextEditor?.document;
-        if (!editor) {
+        let targetDocument = documentToShow ?? vscode.window.activeTextEditor?.document;
+
+        if (!targetDocument && state.lastValidEditorUri) {
+            const existingDoc = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === state.lastValidEditorUri);
+            if (existingDoc) {
+                targetDocument = existingDoc;
+            } else {
+                try {
+                    const fallbackUri = vscode.Uri.parse(state.lastValidEditorUri);
+                    targetDocument = await vscode.workspace.openTextDocument(fallbackUri);
+                } catch (err: any) {
+                    outputChannel.appendLine(`CtrlZTree: Failed to reopen last edited document ${state.lastValidEditorUri}: ${err.message}`);
+                }
+            }
+        }
+
+        if (!targetDocument) {
             vscode.window.showInformationMessage('CtrlZTree: No active document to visualize.');
             return;
         }
 
+        state.lastValidEditorUri = targetDocument.uri.toString();
+
+        const editor = targetDocument;
         const docUriString = editor.uri.toString();
         const existingPanel = activeVisualizationPanels.get(docUriString);
         let fileName = editor.uri.path.split(/[\\/]/).pop() || 'Untitled';
@@ -378,7 +393,7 @@ export function createWebviewManager({
             activeVisualizationPanels.delete(docUriString);
         }
 
-        const tree = getOrCreateTree(editor);
+        getOrCreateTree(editor);
         const panel = vscode.window.createWebviewPanel(
             'ctrlzTreeVisualization',
             `CtrlZTree ${fileName}`,
@@ -393,43 +408,7 @@ export function createWebviewManager({
             }
         );
         activeVisualizationPanels.set(docUriString, panel);
-
-        const nodes = tree.getAllNodes();
-        const nodesArrayForVis: any[] = [];
-        const edgesArrayForVis: any[] = [];
-        const initialFullHashMap = new Map<string, string>();
-        const internalRootHash = tree.getInternalRootHash();
-        const currentHeadFullHash = tree.getHead();
-        let currentHeadShortHash: string | null = null;
-
-        if (currentHeadFullHash) {
-            currentHeadShortHash = currentHeadFullHash.substring(0, 8);
-        }
-
-        nodes.forEach((node, fullHash) => {
-            if (fullHash === internalRootHash) {
-                return;
-            }
-            const shortHash = fullHash.substring(0, 8);
-            initialFullHashMap.set(shortHash, fullHash);
-            const diffPreview = getNodeDiffPreview(node, tree);
-            const previewLabel = diffPreview.label || 'No textual changes';
-            const previewTooltip = diffPreview.tooltip || previewLabel;
-            const timeAgo = formatTimeAgo(node.timestamp);
-            nodesArrayForVis.push({
-                id: shortHash,
-                label: `${timeAgo}\n${shortHash}\n${previewLabel}`,
-                title: `${timeAgo}\nHash: ${shortHash}\n${previewTooltip}`
-            });
-            if (node.parent && node.parent !== internalRootHash) {
-                edgesArrayForVis.push({
-                    from: node.parent.substring(0, 8),
-                    to: shortHash
-                });
-            }
-        });
-        panelToFullHashMap.set(panel, initialFullHashMap);
-        panel.webview.html = await getWebviewContent(nodesArrayForVis, edgesArrayForVis, currentHeadShortHash, panel.webview, fileName);
+        panel.webview.html = await getWebviewContent(panel.webview, fileName);
 
         panel.onDidChangeViewState(
             e => {
@@ -448,6 +427,11 @@ export function createWebviewManager({
         panel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.command) {
+                    case 'webviewReady': {
+                        const currentTree = historyTrees.get(docUriString) ?? getOrCreateTree(editor);
+                        postUpdatesToWebview(panel, currentTree, docUriString);
+                        return;
+                    }
                     case 'openDiff':
                         await handleOpenDiff(message.shortHash, docUriString, panel);
                         return;
