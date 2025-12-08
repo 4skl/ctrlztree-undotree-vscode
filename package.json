@@ -10,7 +10,7 @@
     "tree",
     "ctrlz"
   ],
-  "version": "0.5.3",
+  "version": "0.5.4",
   "publisher": "4skl",
   "icon": "icon.png",
   "repository": {
@@ -24,7 +24,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onEditSession:file"
   ],
   "main": "./out/extension.js",
   "contributes": {

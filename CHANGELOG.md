@@ -2,6 +2,12 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.4] - 2025-12-08
+
+### Changed
+- **Startup Activation Restored**: The extension now activates on `onStartupFinished` (plus `onEditSession:file` and command invocation), ensuring change tracking and commands are registered before you type in restored editors without relying on wildcard `*` activation.
+- **Eager Change Tracking**: Document listeners spin up during activation so both reopened files and newly created untitled buffers start tracking edits without needing to trigger any command first.
+
 ## [0.5.3] - 2025-12-02
 
 ### Added
