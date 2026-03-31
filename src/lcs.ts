@@ -9,122 +9,78 @@ export interface DiffOperation {
 export function generateDiff(input1: string, input2: string): DiffOperation[] {
     const operations: DiffOperation[] = [];
     
-    // Use a simple but efficient character-by-character approach
-    let i = 0;
-    let j = 0;
+    // Compute Longest Common Subsequence using dynamic programming
+    const m = input1.length;
+    const n = input2.length;
+    const lcs: number[][] = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
     
-    while (i < input1.length || j < input2.length) {
-        // Find matching sequences
-        if (i < input1.length && j < input2.length && input1[i] === input2[j]) {
-            // Count consecutive matching characters
-            let matchStart = i;
-            let matchLength = 0;
-            while (i < input1.length && j < input2.length && input1[i] === input2[j]) {
-                matchLength++;
-                i++;
-                j++;
+    // Fill the LCS table
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            if (input1[i - 1] === input2[j - 1]) {
+                lcs[i][j] = lcs[i - 1][j - 1] + 1;
+            } else {
+                lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
             }
-            
-            operations.push({
-                type: 'keep',
-                position: matchStart,
-                length: matchLength
-            });
-        } else if (i < input1.length && (j >= input2.length || input1[i] !== input2[j])) {
-            // Characters in input1 that need to be removed, and corresponding characters in input2 to be added
-            const originalI = i;
-            const originalJ = j;
-
-            // Look ahead to find next matching point or end
-            let nextMatchI = input1.length;
-            let nextMatchJ = j; // Default if no match found involving input2
-
-            // Search for a common character input1[ti] === input2[tj]
-            // where ti is after current i, and tj is at or after current j.
-            for (let ti = originalI + 1; ti < input1.length; ti++) {
-                for (let tj = originalJ; tj < input2.length; tj++) {
-                    if (input1[ti] === input2[tj]) {
-                        nextMatchI = ti;
-                        nextMatchJ = tj;
-                        break; // Found the earliest such match
-                    }
-                }
-                if (nextMatchI < input1.length) { // If match was found in inner loop
-                    break;
-                }
-            }
-
-            // Characters from input1[originalI...nextMatchI-1] are removed
-            if (nextMatchI > originalI) {
-                operations.push({
-                    type: 'remove',
-                    position: originalI,
-                    length: nextMatchI - originalI
-                });
-            }
-
-            // Characters from input2[originalJ...nextMatchJ-1] are added
-            if (nextMatchJ > originalJ) {
-                const contentToAdd = input2.slice(originalJ, nextMatchJ);
-                if (contentToAdd.length > 0) {
-                    operations.push({
-                        type: 'add',
-                        position: originalJ, // Position in input2
-                        content: contentToAdd
-                    });
-                }
-            }
-
-            i = nextMatchI;
-            j = nextMatchJ;
-        } else if (j < input2.length) {
-            // Characters in input2 that need to be added, and corresponding characters in input1 to be removed
-            const originalI = i;
-            const originalJ = j;
-
-            // Look ahead to find next matching point or end
-            let nextMatchI = i; // Default if no match found involving input1
-            let nextMatchJ = input2.length;
-
-            // Search for a common character input2[tj] === input1[ti]
-            // where tj is after current j, and ti is at or after current i.
-            for (let tj = originalJ + 1; tj < input2.length; tj++) {
-                for (let ti = originalI; ti < input1.length; ti++) {
-                    if (input2[tj] === input1[ti]) {
-                        nextMatchI = ti;
-                        nextMatchJ = tj;
-                        break; // Found the earliest such match
-                    }
-                }
-                if (nextMatchJ < input2.length) { // If match was found in inner loop
-                    break;
-                }
-            }
-
-            // Characters from input1[originalI...nextMatchI-1] are removed
-            if (nextMatchI > originalI) {
-                operations.push({
-                    type: 'remove',
-                    position: originalI,
-                    length: nextMatchI - originalI
-                });
-            }
-
-            // Characters from input2[originalJ...nextMatchJ-1] are added
-            if (nextMatchJ > originalJ) {
-                const contentToAdd = input2.slice(originalJ, nextMatchJ);
-                if (contentToAdd.length > 0) {
-                    operations.push({
-                        type: 'add',
-                        position: originalJ, // Position in input2
-                        content: contentToAdd
-                    });
-                }
-            }
-
-            i = nextMatchI;
-            j = nextMatchJ;
         }
+    }
+    
+    // Backtrack to build the diff operations
+    let i = m;
+    let j = n;
+    const tempOps: DiffOperation[] = [];
+    
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && input1[i - 1] === input2[j - 1]) {
+            // Characters match - add to keep operations
+            tempOps.push({
+                type: 'keep',
+                position: i - 1,
+                length: 1
+            });
+            i--;
+            j--;
+        } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+            // Character in input2 but not in LCS from input1 - it's an addition
+            tempOps.push({
+                type: 'add',
+                position: j - 1,
+                content: input2[j - 1]
+            });
+            j--;
+        } else {
+            // Character in input1 but not in LCS - it's a removal
+            tempOps.push({
+                type: 'remove',
+                position: i - 1,
+                length: 1
+            });
+            i--;
+        }
+    }
+    
+    // Reverse because we built backward
+    tempOps.reverse();
+    
+    // Merge consecutive operations of the same type
+    for (const op of tempOps) {
+        if (operations.length > 0) {
+            const last = operations[operations.length - 1];
+            if (op.type === 'keep' && last.type === 'keep' && last.position + last.length! === op.position) {
+                // Merge consecutive keep operations
+                last.length = last.length! + op.length!;
+                continue;
+            } else if (op.type === 'add' && last.type === 'add') {
+                // Merge consecutive add operations
+                last.content = (last.content || '') + op.content;
+                continue;
+            } else if (op.type === 'remove' && last.type === 'remove' && last.position + last.length! === op.position) {
+                // Merge consecutive remove operations
+                last.length = last.length! + op.length!;
+                continue;
+            }
+        }
+        operations.push(op);
     }
     
     return operations;
@@ -235,90 +191,86 @@ export function generateUnifiedDiff(originalContent: string, newContent: string,
 
 // Generate line-based diff operations
 function generateLineDiff(originalLines: string[], newLines: string[]): LineDiffOperation[] {
-    const operations: LineDiffOperation[] = [];
-    let i = 0, j = 0;
+    // Compute Longest Common Subsequence of lines using dynamic programming
+    const m = originalLines.length;
+    const n = newLines.length;
+    const lcs: number[][] = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
     
-    while (i < originalLines.length || j < newLines.length) {
-        if (i < originalLines.length && j < newLines.length && originalLines[i] === newLines[j]) {
-            // Lines match - keep
-            let matchLength = 0;
-            let matchStart = i;
-            while (i < originalLines.length && j < newLines.length && originalLines[i] === newLines[j]) {
-                matchLength++;
-                i++;
-                j++;
+    // Fill the LCS table
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            if (originalLines[i - 1] === newLines[j - 1]) {
+                lcs[i][j] = lcs[i - 1][j - 1] + 1;
+            } else {
+                lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
             }
-            operations.push({
-                type: 'keep',
-                oldStart: matchStart,
-                newStart: j - matchLength,
-                lines: originalLines.slice(matchStart, matchStart + matchLength)
-            });
-        } else if (i < originalLines.length && (j >= newLines.length || originalLines[i] !== newLines[j])) {
-            // Find next matching point for deletions
-            let deleteStart = i;
-            let deleteLines: string[] = [];
-            let nextMatchI = originalLines.length;
-            let nextMatchJ = j;
-              // Look ahead to find next matching line
-            for (let ti = i; ti < originalLines.length; ti++) {
-                for (let tj = j; tj < newLines.length; tj++) {
-                    if (originalLines[ti] === newLines[tj]) {
-                        nextMatchI = ti;
-                        nextMatchJ = tj;
-                        break;
-                    }
-                }
-                if (nextMatchI < originalLines.length) {
-                    break;
-                }
-            }
-            
-            deleteLines = originalLines.slice(i, nextMatchI);
-            if (deleteLines.length > 0) {
-                operations.push({
-                    type: 'remove',
-                    oldStart: deleteStart,
-                    newStart: j,
-                    lines: deleteLines
-                });
-            }
-            
-            i = nextMatchI;
-            j = nextMatchJ;
-        } else if (j < newLines.length) {
-            // Find next matching point for additions
-            let addStart = j;
-            let addLines: string[] = [];
-            let nextMatchI = i;
-            let nextMatchJ = newLines.length;
-              // Look ahead to find next matching line
-            for (let tj = j; tj < newLines.length; tj++) {
-                for (let ti = i; ti < originalLines.length; ti++) {
-                    if (newLines[tj] === originalLines[ti]) {
-                        nextMatchI = ti;
-                        nextMatchJ = tj;
-                        break;
-                    }
-                }
-                if (nextMatchJ < newLines.length) {
-                    break;
-                }
-            }
-            
-            addLines = newLines.slice(j, nextMatchJ);
-            if (addLines.length > 0) {
-                operations.push({
-                    type: 'add',
-                    oldStart: i,
-                    newStart: addStart,
-                    lines: addLines
-                });
-            }
-            
-            i = nextMatchI;
-            j = nextMatchJ;
         }
+    }
+    
+    // Backtrack to build the diff operations
+    let i = m;
+    let j = n;
+    const tempOps: LineDiffOperation[] = [];
+    
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && originalLines[i - 1] === newLines[j - 1]) {
+            // Lines match - add to keep operations
+            tempOps.push({
+                type: 'keep',
+                oldStart: i - 1,
+                newStart: j - 1,
+                lines: [originalLines[i - 1]]
+            });
+            i--;
+            j--;
+        } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+            // Line in newLines but not in LCS from originalLines - it's an addition
+            tempOps.push({
+                type: 'add',
+                oldStart: i,
+                newStart: j - 1,
+                lines: [newLines[j - 1]]
+            });
+            j--;
+        } else {
+            // Line in originalLines but not in LCS - it's a removal
+            tempOps.push({
+                type: 'remove',
+                oldStart: i - 1,
+                newStart: j,
+                lines: [originalLines[i - 1]]
+            });
+            i--;
+        }
+    }
+    
+    // Reverse because we built backward
+    tempOps.reverse();
+    
+    // Merge consecutive operations of the same type
+    const operations: LineDiffOperation[] = [];
+    for (const op of tempOps) {
+        if (operations.length > 0) {
+            const last = operations[operations.length - 1];
+            if (op.type === 'keep' && last.type === 'keep' && 
+                last.oldStart + last.lines.length === op.oldStart &&
+                last.newStart + last.lines.length === op.newStart) {
+                // Merge consecutive keep operations
+                last.lines.push(...op.lines);
+                continue;
+            } else if (op.type === 'add' && last.type === 'add' && 
+                      last.newStart + last.lines.length === op.newStart) {
+                // Merge consecutive add operations
+                last.lines.push(...op.lines);
+                continue;
+            } else if (op.type === 'remove' && last.type === 'remove' && 
+                      last.oldStart + last.lines.length === op.oldStart) {
+                // Merge consecutive remove operations
+                last.lines.push(...op.lines);
+                continue;
+            }
+        }
+        operations.push(op);
     }
     
     return operations;
@@ -443,10 +395,11 @@ export function generateDiffSummary(originalContent: string, newContent: string)
             addedLines += op.lines.length;
             
             // Count all characters in added content
-            for (const line of op.lines) {
+            for (let idx = 0; idx < op.lines.length; idx++) {
+                const line = op.lines[idx];
                 addedChars += line.length;
                 // Count newlines except for the last line (since split removes the final newline)
-                if (op.lines.indexOf(line) < op.lines.length - 1) {
+                if (idx < op.lines.length - 1) {
                     addedChars += 1; // for the newline character
                 }
             }
@@ -470,10 +423,11 @@ export function generateDiffSummary(originalContent: string, newContent: string)
             removedLines += op.lines.length;
             
             // Count all characters in removed content
-            for (const line of op.lines) {
+            for (let idx = 0; idx < op.lines.length; idx++) {
+                const line = op.lines[idx];
                 removedChars += line.length;
                 // Count newlines except for the last line
-                if (op.lines.indexOf(line) < op.lines.length - 1) {
+                if (idx < op.lines.length - 1) {
                     removedChars += 1; // for the newline character
                 }
             }

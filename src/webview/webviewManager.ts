@@ -312,10 +312,20 @@ export function createWebviewManager({
     }
 
     function updatePanelDocumentContext(panel: vscode.WebviewPanel, document: vscode.TextDocument) {
+        const newDocUriString = document.uri.toString();
+        
+        // Clean up old association if this panel was previously associated with a different document
+        const oldContext = panelDocumentContexts.get(panel);
+        if (oldContext && oldContext.docUriString !== newDocUriString) {
+            activeVisualizationPanels.delete(oldContext.docUriString);
+        }
+        
+        // Update both maps atomically
         panelDocumentContexts.set(panel, {
-            docUriString: document.uri.toString(),
+            docUriString: newDocUriString,
             document
         });
+        activeVisualizationPanels.set(newDocUriString, panel);
     }
 
     function getPanelDocumentContext(panel: vscode.WebviewPanel) {
@@ -468,15 +478,6 @@ export function createWebviewManager({
                     case 'webviewError':
                         outputChannel.appendLine(`CtrlZTree: Webview CRITICAL ERROR: ${message.error.message} Stack: ${message.error.stack}`);
                         vscode.window.showErrorMessage(`CtrlZTree Webview Critical Error: ${message.error.message}. Check CtrlZTree output channel.`);
-                        return;
-                    case 'dbgCoords':
-                        try {
-                            const d = message.data || {};
-                            const msg = `CtrlZTree dbgCoords: node=${d.selectedNodeId} pos=${JSON.stringify(d.position)} dom=${JSON.stringify(d.domPosition)} scroll=(${d.scrollX},${d.scrollY}) left=${d.left} top=${d.top} clampedLeft=${d.clampedLeft} clampedTop=${d.clampedTop} view=${JSON.stringify(d.viewport)}`;
-                            outputChannel.appendLine(msg);
-                        } catch (e) {
-                            outputChannel.appendLine(`CtrlZTree dbgCoords: failed to serialize debug message: ${e}`);
-                        }
                         return;
                 }
             },
@@ -688,17 +689,10 @@ export function createWebviewManager({
             }
 
             historyTrees.delete(docUriString);
+            // Create fresh tree with current document content
+            // The constructor already initializes with set(content), so we don't call set() again
             const newTree = new CtrlZTree(targetDocument.getText());
             historyTrees.set(docUriString, newTree);
-
-            let cursorPosition: vscode.Position | undefined;
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document.uri.toString() === docUriString) {
-                cursorPosition = editor.selection.active;
-            }
-            if (cursorPosition) {
-                newTree.set(targetDocument.getText(), cursorPosition);
-            }
 
             resetDocumentTracking(docUriString);
             postUpdatesToWebview(panel, newTree, docUriString);

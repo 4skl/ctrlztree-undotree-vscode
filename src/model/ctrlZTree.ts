@@ -47,8 +47,13 @@ export class CtrlZTree {
         const path = this.getPathToRoot(hash);
         let content = this.trueEmptyRootContent;
 
-        for (let i = path.length - 2; i >= 0; i--) {
+        // Path is [target, parent, ..., root] - reverse it to [root, ..., parent, target]
+        for (let i = path.length - 1; i >= 0; i--) {
             const node = this.nodes.get(path[i])!;
+            // Skip the root node (it has no diff and content is already empty)
+            if (node === this.nodes.get(this.trueEmptyRootHash)) {
+                continue;
+            }
             if (node.diff) {
                 const diffOps = deserializeDiff(node.diff);
                 content = applyDiff(content, diffOps);
@@ -75,13 +80,23 @@ export class CtrlZTree {
 
     set(content: string, cursorPosition?: vscode.Position): string {
         const newHash = this.calculateHash(content);
+        const currentContent = this.head ? this.reconstructContent(this.head) : this.trueEmptyRootContent;
 
+        // Only move head to existing node if it's a valid child of current head
         if (this.nodes.has(newHash)) {
-            this.head = newHash;
-            return newHash;
+            const existingNode = this.nodes.get(newHash)!;
+            // Verify the node is actually a child of the current head (or we're at root)
+            if (existingNode.parent === this.head) {
+                this.head = newHash;
+                return newHash;
+            }
+            // If the node exists but is not a valid child, fall through to create a new one
         }
 
-        const currentContent = this.head ? this.reconstructContent(this.head) : this.trueEmptyRootContent;
+        // Content is the same as current head - no change needed
+        if (currentContent === content && !cursorPosition) {
+            return this.head || this.trueEmptyRootHash;
+        }
 
         const diffOps = generateDiff(currentContent, content);
         const serializedDiff = serializeDiff(diffOps);
@@ -110,6 +125,12 @@ export class CtrlZTree {
         }
 
         const currentNode = this.nodes.get(this.head)!;
+        
+        // Prevent undoing past the initial snapshot - don't go back before the file was opened
+        if (this.head === this.initialSnapshotHash) {
+            return null;
+        }
+        
         if (currentNode.parent) {
             this.head = currentNode.parent;
             return this.head;

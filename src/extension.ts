@@ -338,11 +338,11 @@ async function applyTreeStateToDocument(
         const content = tree.getContent();
         const cursorPosition = tree.getCursorPosition();
         const edit = new vscode.WorkspaceEdit();
-        edit.replace(
-            document.uri,
-            new vscode.Range(0, 0, document.lineCount, 0),
-            content
-        );
+        // Create range for the entire document: from line 0 to the end of the last line
+        const lastLineIndex = Math.max(0, document.lineCount - 1);
+        const endChar = document.lineCount === 0 ? 0 : document.lineAt(lastLineIndex).text.length;
+        const fullRange = new vscode.Range(0, 0, lastLineIndex, endChar);
+        edit.replace(document.uri, fullRange, content);
         await vscode.workspace.applyEdit(edit);
 
         if (cursorPosition) {
