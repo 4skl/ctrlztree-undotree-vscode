@@ -12,6 +12,7 @@ CtrlZTree brings tree-based undo/redo functionality to VS Code, inspired by the 
 ### 🎯 Enhanced Undo/Redo
 - **Custom Undo/Redo**: Replaces VS Code's default Ctrl+Z/Ctrl+Y with tree-aware operations
 - **Alternative Keybinding**: Ctrl+Shift+Z (Cmd+Shift+Z on Mac) also works for redo operations
+- **Smart Undo Protection**: Initial file content is protected - can't undo past the state when file was opened
 - **Smart Empty File Undo**: When file is empty and you press Ctrl+Z, automatically jumps to the latest non-empty state
 - **Branch Selection**: When multiple redo paths exist, choose which branch to follow
 - **Content Preview**: See previews of document states when selecting branches

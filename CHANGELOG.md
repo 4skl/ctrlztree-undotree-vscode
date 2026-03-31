@@ -2,6 +2,43 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.6] - 2026-03-31
+
+### Fixed
+- **Critical: Generate Diff Algorithm**: Replaced broken greedy diff algorithm with proper Longest Common Subsequence (LCS) using dynamic programming
+  - Fixes incorrect diffs for cases like "abc" → "bac" that would cause silent data corruption
+  - Ensures `applyDiff` produces correct results, preventing data loss in tree
+- **Critical: Hash Collision Handling**: Fixed `set()` method silently moving head on hash collision
+  - Now validates that nodes are actual children before jumping to them
+  - Prevents orphaned heads and broken tree structure when navigating to old states
+- **Critical: Content Reconstruction Path**: Fixed off-by-one indexing in `reconstructContent` that could skip applying diffs
+  - Clarified path traversal logic from root to head
+  - Removes confusing index arithmetic that was a bug waiting to happen
+- **Critical: Initial Snapshot Undo**: Prevented undoing past initial file snapshot when no changes made
+  - First Ctrl+Z on newly opened file now shows "No more undo history" instead of erasing content
+  - Initial file content is properly treated as the baseline state
+- **Line Diff Performance**: Replaced O(n²) greedy lookahead in `generateLineDiff` with proper LCS DP algorithm
+  - Dramatically improves performance for large files
+  - Produces better diffs through proper common subsequence detection
+- **Diff Summary Performance**: Replaced O(n²) `indexOf()` calls in `generateDiffSummary` with O(n) index-based iteration
+  - Improves performance in hot loops for operation processing
+- **Document Range Error**: Fixed off-by-one error in `applyTreeStateToDocument` using `document.lineCount`
+  - Now correctly calculates range to last line instead of going one line too far
+  - Ensures precision document replacement without relying on VS Code's clamping
+- **Panel Context Stale State**: Fixed atomic update issue when switching files
+  - Panel context now updates `panelDocumentContexts` and `activeVisualizationPanels` together
+  - Prevents stale `docUriString` references when reusing panels across files
+- **Debug Logging Noise**: Removed production logging of all `dbgCoords` debug events in webview
+  - Eliminates excessive coordinate debug messages flooding the output channel
+- **Tree Reset Duplicate Node**: Fixed `handleTreeReset` creating unnecessary duplicate nodes
+  - Constructor already calls `set()` with initial content, removed the second call
+  - Prevents unwanted node duplication during tree reset
+
+### Technical Details
+- Implemented Longest Common Subsequence (LCS) DP algorithm for both character-level and line-level diffs
+- Improved atomic updates in panel management to prevent race conditions
+- Enhanced validation of hash collisions in tree structure
+
 ## [0.5.5] - 2026-03-31
 
 ### Added
