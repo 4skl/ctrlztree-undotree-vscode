@@ -81,6 +81,33 @@ For full release notes see [CHANGELOG.md](CHANGELOG.md). Recent highlights:
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
+## ⚙️ Configuration
+
+CtrlZTree provides configurable settings to control memory usage and pruning behavior:
+
+### History Pruning Settings
+
+- **`ctrlztree.enablePruning`** (boolean, default: `true`)
+  - Enable or disable automatic history tree pruning. When disabled, history will grow indefinitely until you close the file.
+
+- **`ctrlztree.maxHistoryNodesPerDocument`** (integer, default: `1000`, minimum: `100`)
+  - Maximum number of history nodes to keep per document. When exceeded, the oldest nodes are removed while preserving the current state and recent history.
+  - Example: Set to `500` for lower memory usage, or `2000` for more extensive history on powerful machines.
+
+- **`ctrlztree.maxTrackedDocuments`** (integer, default: `100`, minimum: `1`)
+  - Maximum number of documents to keep history for. When exceeded, histories for oldest (least recently used) closed documents are discarded.
+  - Example: Set to `50` if working with many temporary files, or `200` for keeping more file histories.
+
+### Example User Settings
+
+```json
+{
+  "ctrlztree.enablePruning": true,
+  "ctrlztree.maxHistoryNodesPerDocument": 500,
+  "ctrlztree.maxTrackedDocuments": 50
+}
+```
+
 ## 🤝 Contributing
 
 We welcome contributions! This extension is under active development and there are many opportunities to help:

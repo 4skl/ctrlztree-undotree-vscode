@@ -2,7 +2,7 @@
 import { generateDiffSummary } from './lcs';
 import { CtrlZTree } from './model/ctrlZTree';
 import { createExtensionState } from './state/extensionState';
-import { DIFF_SCHEME, ACTION_TIMEOUT, PAUSE_THRESHOLD, MAX_HISTORY_NODES_PER_DOCUMENT, MAX_TOTAL_DOCUMENTS } from './constants';
+import { DIFF_SCHEME, ACTION_TIMEOUT, PAUSE_THRESHOLD } from './constants';
 import { createWebviewManager, WebviewManager } from './webview/webviewManager';
 import { registerDocumentChangeTracking } from './services/changeTracker';
 import { markEditorCleanIfAtInitialSnapshot } from './utils/editorState';
@@ -26,6 +26,15 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, diffContentProvider)
     );
 
+    const getConfig = () => {
+        const config = vscode.workspace.getConfiguration('ctrlztree');
+        return {
+            enablePruning: config.get<boolean>('enablePruning', true),
+            maxHistoryNodesPerDocument: config.get<number>('maxHistoryNodesPerDocument', 1000),
+            maxTrackedDocuments: config.get<number>('maxTrackedDocuments', 100)
+        };
+    };
+
     const getOrCreateTree = (document: vscode.TextDocument): CtrlZTree => {
         const key = document.uri.toString();
         let tree = extensionState.historyTrees.get(key);
@@ -35,14 +44,16 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`CtrlZTree: Created new tree for ${key}`);
         }
 
-        // Prune if tree exceeds max nodes
-        if (tree.getNodeCount() > MAX_HISTORY_NODES_PER_DOCUMENT) {
-            tree.pruneToMaxNodes(Math.floor(MAX_HISTORY_NODES_PER_DOCUMENT * 0.95));
+        const config = getConfig();
+
+        // Prune if tree exceeds max nodes (only if pruning enabled)
+        if (config.enablePruning && tree.getNodeCount() > config.maxHistoryNodesPerDocument) {
+            tree.pruneToMaxNodes(Math.floor(config.maxHistoryNodesPerDocument * 0.95));
             outputChannel.appendLine(`CtrlZTree: Pruned history for ${key} (now ${tree.getNodeCount()} nodes)`);
         }
 
-        // Clean up old histories if too many documents are tracked
-        if (extensionState.historyTrees.size > MAX_TOTAL_DOCUMENTS) {
+        // Clean up old histories if too many documents are tracked (only if pruning enabled)
+        if (config.enablePruning && extensionState.historyTrees.size > config.maxTrackedDocuments) {
             const entries = Array.from(extensionState.historyTrees.entries());
             const openUris = new Set(vscode.workspace.textDocuments.map(d => d.uri.toString()));
             const entriesToDelete = entries
@@ -56,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
                     const timeB = Math.max(...Array.from(nodesB.values()).map(n => n.timestamp));
                     return timeA - timeB; // Oldest first
                 })
-                .slice(0, extensionState.historyTrees.size - MAX_TOTAL_DOCUMENTS);
+                .slice(0, extensionState.historyTrees.size - config.maxTrackedDocuments);
 
             for (const [uriToDelete] of entriesToDelete) {
                 extensionState.historyTrees.delete(uriToDelete);

@@ -62,7 +62,29 @@
         "mac": "cmd+shift+z",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "CtrlZTree",
+      "properties": {
+        "ctrlztree.enablePruning": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic history tree pruning to prevent unbounded memory growth"
+        },
+        "ctrlztree.maxHistoryNodesPerDocument": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 100,
+          "description": "Maximum number of history nodes to keep per document before pruning (minimum 100)"
+        },
+        "ctrlztree.maxTrackedDocuments": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "description": "Maximum number of documents to track simultaneously. Oldest histories are removed when exceeded"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

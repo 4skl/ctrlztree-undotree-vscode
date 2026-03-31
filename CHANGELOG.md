@@ -5,8 +5,11 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 ## [0.5.5] - 2026-03-31
 
 ### Added
+- **Configurable History Pruning**: Pruning behavior is now fully configurable via settings
+  - `ctrlztree.enablePruning`: Enable/disable automatic pruning (default: true)
+  - `ctrlztree.maxHistoryNodesPerDocument`: Maximum nodes per document (default: 1000, min: 100)
+  - `ctrlztree.maxTrackedDocuments`: Maximum documents to track (default: 100, min: 1)
 - **Memory Management**: History trees now have automatic pruning to prevent unbounded memory growth
-  - Configurable limits: `MAX_HISTORY_NODES_PER_DOCUMENT = 1000` and `MAX_TOTAL_DOCUMENTS = 100`
   - Automatic pruning when tree exceeds node limit (keeps 95% most recent)
   - Cleanup of oldest document histories when tracking too many files
 - **Input Validation**: Enhanced security with strict validation of serialized diffs before deserialization
@@ -34,9 +37,10 @@ All notable changes to the "ctrlztree" extension will be documented in this file
 
 ### Technical Details
 - Added `pruneToMaxNodes()` and `getNodeCount()` methods to CtrlZTree class
-- Enhanced `getOrCreateTree()` with automatic pruning and cleanup logic
+- Enhanced `getOrCreateTree()` with dynamic configuration reading and pruning logic
 - Added document close listener for proper resource cleanup
 - Improved deserializeDiff() with comprehensive validation
+- Settings are read dynamically from VS Code configuration
 - Dependencies updated: ESLint 7.27.0 → 8.56.0 with @typescript-eslint support
 - All code passes strict linting without warnings
 
