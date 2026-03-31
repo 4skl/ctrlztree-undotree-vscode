@@ -206,4 +206,62 @@ export class CtrlZTree {
     public getInitialSnapshotHash(): string {
         return this.initialSnapshotHash ?? this.trueEmptyRootHash;
     }
+
+    /**
+     * Get the number of nodes in the history tree.
+     * Useful for monitoring memory usage.
+     */
+    public getNodeCount(): number {
+        return this.nodes.size;
+    }
+
+    /**
+     * Prune the history tree to keep only the most recent nodes.
+     * This prevents unbounded memory growth for long-lived editors.
+     * Keeps all nodes on the path to the current head, plus recent leaf nodes.
+     */
+    public pruneToMaxNodes(maxNodes: number): void {
+        if (this.nodes.size <= maxNodes) {
+            return;
+        }
+
+        // Always keep nodes on the path to root and the current head
+        const nodesToKeep = new Set<string>();
+
+        // Keep the current head and all ancestors
+        let currentHash = this.head;
+        while (currentHash) {
+            nodesToKeep.add(currentHash);
+            const node = this.nodes.get(currentHash);
+            if (!node || node.parent === null) {
+                break;
+            }
+            currentHash = node.parent;
+        }
+
+        // If we haven't reached maxNodes yet, keep the most recent leaf nodes
+        if (nodesToKeep.size < maxNodes) {
+            const allNodes = Array.from(this.nodes.entries());
+            const sortedByTime = allNodes.sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+            for (const [hash] of sortedByTime) {
+                if (nodesToKeep.size >= maxNodes) {
+                    break;
+                }
+                nodesToKeep.add(hash);
+            }
+        }
+
+        // Remove nodes that are not in the keep set
+        for (const hash of this.nodes.keys()) {
+            if (!nodesToKeep.has(hash)) {
+                this.nodes.delete(hash);
+            }
+        }
+
+        // Clean up references to deleted nodes
+        for (const node of this.nodes.values()) {
+            node.children = node.children.filter(child => this.nodes.has(child));
+        }
+    }
 }

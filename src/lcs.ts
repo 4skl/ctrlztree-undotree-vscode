@@ -32,17 +32,17 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
             });
         } else if (i < input1.length && (j >= input2.length || input1[i] !== input2[j])) {
             // Characters in input1 that need to be removed, and corresponding characters in input2 to be added
-            let original_i = i;
-            let original_j = j;
-            
+            const originalI = i;
+            const originalJ = j;
+
             // Look ahead to find next matching point or end
             let nextMatchI = input1.length;
             let nextMatchJ = j; // Default if no match found involving input2
-            
+
             // Search for a common character input1[ti] === input2[tj]
             // where ti is after current i, and tj is at or after current j.
-            for (let ti = original_i + 1; ti < input1.length; ti++) {
-                for (let tj = original_j; tj < input2.length; tj++) {
+            for (let ti = originalI + 1; ti < input1.length; ti++) {
+                for (let tj = originalJ; tj < input2.length; tj++) {
                     if (input1[ti] === input2[tj]) {
                         nextMatchI = ti;
                         nextMatchJ = tj;
@@ -53,43 +53,43 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
                     break;
                 }
             }
-            
-            // Characters from input1[original_i...nextMatchI-1] are removed
-            if (nextMatchI > original_i) {
+
+            // Characters from input1[originalI...nextMatchI-1] are removed
+            if (nextMatchI > originalI) {
                 operations.push({
                     type: 'remove',
-                    position: original_i,
-                    length: nextMatchI - original_i
+                    position: originalI,
+                    length: nextMatchI - originalI
                 });
             }
-            
-            // Characters from input2[original_j...nextMatchJ-1] are added
-            if (nextMatchJ > original_j) {
-                const contentToAdd = input2.slice(original_j, nextMatchJ);
+
+            // Characters from input2[originalJ...nextMatchJ-1] are added
+            if (nextMatchJ > originalJ) {
+                const contentToAdd = input2.slice(originalJ, nextMatchJ);
                 if (contentToAdd.length > 0) {
                     operations.push({
                         type: 'add',
-                        position: original_j, // Position in input2
+                        position: originalJ, // Position in input2
                         content: contentToAdd
                     });
                 }
             }
-            
+
             i = nextMatchI;
             j = nextMatchJ;
         } else if (j < input2.length) {
             // Characters in input2 that need to be added, and corresponding characters in input1 to be removed
-            let original_i = i;
-            let original_j = j;
+            const originalI = i;
+            const originalJ = j;
 
             // Look ahead to find next matching point or end
             let nextMatchI = i; // Default if no match found involving input1
             let nextMatchJ = input2.length;
-            
+
             // Search for a common character input2[tj] === input1[ti]
             // where tj is after current j, and ti is at or after current i.
-            for (let tj = original_j + 1; tj < input2.length; tj++) {
-                for (let ti = original_i; ti < input1.length; ti++) {
+            for (let tj = originalJ + 1; tj < input2.length; tj++) {
+                for (let ti = originalI; ti < input1.length; ti++) {
                     if (input2[tj] === input1[ti]) {
                         nextMatchI = ti;
                         nextMatchJ = tj;
@@ -100,28 +100,28 @@ export function generateDiff(input1: string, input2: string): DiffOperation[] {
                     break;
                 }
             }
-            
-            // Characters from input1[original_i...nextMatchI-1] are removed
-            if (nextMatchI > original_i) {
+
+            // Characters from input1[originalI...nextMatchI-1] are removed
+            if (nextMatchI > originalI) {
                 operations.push({
                     type: 'remove',
-                    position: original_i,
-                    length: nextMatchI - original_i
+                    position: originalI,
+                    length: nextMatchI - originalI
                 });
             }
-            
-            // Characters from input2[original_j...nextMatchJ-1] are added
-            if (nextMatchJ > original_j) {
-                const contentToAdd = input2.slice(original_j, nextMatchJ);
+
+            // Characters from input2[originalJ...nextMatchJ-1] are added
+            if (nextMatchJ > originalJ) {
+                const contentToAdd = input2.slice(originalJ, nextMatchJ);
                 if (contentToAdd.length > 0) {
                     operations.push({
                         type: 'add',
-                        position: original_j, // Position in input2
+                        position: originalJ, // Position in input2
                         content: contentToAdd
                     });
                 }
             }
-            
+
             i = nextMatchI;
             j = nextMatchJ;
         }
@@ -161,9 +161,37 @@ export function serializeDiff(operations: DiffOperation[]): string {
     return JSON.stringify(operations);
 }
 
-// Helper function to parse a diff string
+// Helper function to parse a diff string with validation
 export function deserializeDiff(diffStr: string): DiffOperation[] {
-    return JSON.parse(diffStr);
+    try {
+        const operations = JSON.parse(diffStr);
+
+        // Validate that result is an array
+        if (!Array.isArray(operations)) {
+            throw new Error('Deserialized diff is not an array');
+        }
+
+        // Validate each operation has required properties
+        for (const op of operations) {
+            if (!op.type || !['keep', 'add', 'remove'].includes(op.type)) {
+                throw new Error(`Invalid operation type: ${op.type}`);
+            }
+            if (typeof op.position !== 'number' || op.position < 0) {
+                throw new Error(`Invalid position in operation: ${op.position}`);
+            }
+            if (op.type === 'add' && typeof op.content !== 'string') {
+                throw new Error('Add operation missing content');
+            }
+            if ((op.type === 'keep' || op.type === 'remove') &&
+                (typeof op.length !== 'number' || op.length < 0)) {
+                throw new Error(`Invalid length in operation: ${op.length}`);
+            }
+        }
+
+        return operations;
+    } catch (error) {
+        throw new Error(`Failed to deserialize diff: ${error instanceof Error ? error.message : String(error)}`);
+    }
 }
 
 // Generate a git-style unified diff representation
@@ -376,22 +404,22 @@ function groupIntoHunks(operations: LineDiffOperation[], contextLines: number): 
     return hunks;
 }
 
-// Helper function to format text with middle ellipsis (same logic as formatTextForNodeDisplay)
-function formatTextForDiffDisplay(text: string): string {
+// Helper function to format text with middle ellipsis for display
+export function formatTextForDisplay(text: string): string {
     if (!text || text.trim() === '') {
         return "Empty content";
     }
-    
+
     // Clean the text: remove excessive whitespace, normalize line breaks
     const cleanText = text.replace(/\s+/g, ' ').trim();
-    
+
     // Apply middle ellipsis format if text is too long
     if (cleanText.length > 80) {
         // Show first 37 chars + newline + ... + newline + last 37 chars
-        return cleanText.substring(0, 37) + '\n...\n' + 
+        return cleanText.substring(0, 37) + '\n...\n' +
                cleanText.substring(cleanText.length - 37);
     }
-    
+
     return cleanText;
 }
 
@@ -429,7 +457,7 @@ export function generateDiffSummary(originalContent: string, newContent: string)
             // Check if there's actual content (not just whitespace)
             if (rawContent.trim()) {
                 hasContentChanges = true;
-                const formattedContent = formatTextForDiffDisplay(rawContent);
+                const formattedContent = formatTextForDisplay(rawContent);
                 changes.push(`+${formattedContent}`);
             } else if (rawContent.length > 0) {
                 // Only whitespace was added - store separately
@@ -456,7 +484,7 @@ export function generateDiffSummary(originalContent: string, newContent: string)
             // Check if there's actual content (not just whitespace)
             if (rawContent.trim()) {
                 hasContentChanges = true;
-                const formattedContent = formatTextForDiffDisplay(rawContent);
+                const formattedContent = formatTextForDisplay(rawContent);
                 changes.push(`-${formattedContent}`);
             } else if (rawContent.length > 0) {
                 // Only whitespace was removed - store separately

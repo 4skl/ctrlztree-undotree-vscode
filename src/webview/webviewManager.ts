@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { generateDiffSummary, deserializeDiff, DiffOperation } from '../lcs';
+import { generateDiffSummary, deserializeDiff, DiffOperation, formatTextForDisplay } from '../lcs';
 import { CtrlZTree, TreeNode } from '../model/ctrlZTree';
 import { ExtensionState } from '../state/extensionState';
 import { DIFF_SCHEME } from '../constants';
@@ -72,17 +72,6 @@ export function createWebviewManager({
             outputChannel.appendLine(`CtrlZTree: Error posting message to webview: ${error}`);
             return false;
         }
-    }
-
-    function formatTextForNodeDisplay(text: string): string {
-        if (!text || text.trim() === '') {
-            return 'Empty content';
-        }
-        const cleanText = text.replace(/\s+/g, ' ').trim();
-        if (cleanText.length > 80) {
-            return cleanText.substring(0, 37) + '\n...\n' + cleanText.substring(cleanText.length - 37);
-        }
-        return cleanText;
     }
 
     function truncateInlineText(text: string, maxLength: number): string {
@@ -225,7 +214,7 @@ export function createWebviewManager({
             const parentHash = node.parent;
 
             if (!parentHash || !node.diff) {
-                const fallback = formatTextForNodeDisplay(currentContent);
+                const fallback = formatTextForDisplay(currentContent);
                 return { label: fallback, tooltip: fallback };
             }
 
@@ -247,7 +236,7 @@ export function createWebviewManager({
                 tooltip: tooltipParts.join('\n')
             };
         } catch {
-            const fallback = formatTextForNodeDisplay(tree.getContent(node.hash));
+            const fallback = formatTextForDisplay(tree.getContent(node.hash));
             return { label: fallback, tooltip: fallback };
         }
     }

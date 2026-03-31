@@ -37,9 +37,10 @@ export async function markEditorCleanIfAtInitialSnapshot(
                 options.outputChannel.appendLine(`CtrlZTree: Unable to clear dirty state for ${document.uri.toString()} (save returned false).`);
             }
         }
-    } catch (error: any) {
+    } catch (error) {
         if (options.outputChannel) {
-            options.outputChannel.appendLine(`CtrlZTree: Failed to compare saved content against initial snapshot for ${document.uri.toString()}: ${error.message}`);
+            const message = error instanceof Error ? error.message : String(error);
+            options.outputChannel.appendLine(`CtrlZTree: Failed to compare saved content against initial snapshot for ${document.uri.toString()}: ${message}`);
         }
     }
 }
