@@ -2,6 +2,44 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.5] - 2026-03-31
+
+### Added
+- **Memory Management**: History trees now have automatic pruning to prevent unbounded memory growth
+  - Configurable limits: `MAX_HISTORY_NODES_PER_DOCUMENT = 1000` and `MAX_TOTAL_DOCUMENTS = 100`
+  - Automatic pruning when tree exceeds node limit (keeps 95% most recent)
+  - Cleanup of oldest document histories when tracking too many files
+- **Input Validation**: Enhanced security with strict validation of serialized diffs before deserialization
+  - Validates array structure, operation types and properties
+  - Proper error messages for malformed diff data
+  - Prevents potential issues with corrupted history states
+
+### Changed
+- **Code Consolidation**: Eliminated duplicate formatting functions across modules
+  - Merged `formatTextForNodeDisplay()` and `formatTextForDiffDisplay()` into single `formatTextForDisplay()`
+  - Reduced code duplication and maintenance burden
+- **Error Handling**: Improved type safety in error handling throughout extension
+  - Replaced unsafe `error: any` catch blocks with proper Error type checking
+  - All error messages safely constructed to handle both Error objects and primitives
+- **TypeScript Configuration**: Enhanced compiler options for better IDE compatibility
+  - Added `skipLibCheck: true` to suppress declaration file warnings
+  - Improves debugging experience without affecting build integrity
+
+### Fixed
+- **Document Cleanup**: Proper cleanup of history trees when documents are closed
+  - Removes history entries, timeouts, and cursor positions for closed files
+  - Prevents memory leaks from accumulated state for deleted files
+- **Linting**: Fixed ESLint naming convention violations
+  - Converted snake_case variables to camelCase in diff algorithm
+
+### Technical Details
+- Added `pruneToMaxNodes()` and `getNodeCount()` methods to CtrlZTree class
+- Enhanced `getOrCreateTree()` with automatic pruning and cleanup logic
+- Added document close listener for proper resource cleanup
+- Improved deserializeDiff() with comprehensive validation
+- Dependencies updated: ESLint 7.27.0 → 8.56.0 with @typescript-eslint support
+- All code passes strict linting without warnings
+
 ## [0.5.4] - 2025-12-08
 
 ### Changed

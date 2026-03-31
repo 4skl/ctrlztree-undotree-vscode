@@ -70,6 +70,7 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 7. **Diff button** appears below the current active node (if it has a parent)
 For full release notes see [CHANGELOG.md](CHANGELOG.md). Recent highlights:
 
+- **0.5.5 (2026-03-31)** — Quality & robustness improvements: automatic history pruning with configurable limits (1000 nodes per document, 100 documents max), strict input validation for diff deserialization, code consolidation eliminating duplicate formatting functions, improved error handling with proper type safety, and memory leak prevention with automatic document cleanup.
 - **0.5.4 (2025-12-08)** — Startup activation via `onStartupFinished` (plus `onEditSession` and commands) so change tracking and commands are ready as soon as VS Code launches restored editors.
 - **0.5.3 (2025-12-02)** — Visualize command auto-resolves a document even before an editor is active; root and baseline always visible with undo back to empty; smarter panel targeting, clean-state detection, and a webview bootstrap handshake.
 - **0.5.2 (2025-12-01)** — Root-state undo protection, diff-only node storage with whitespace-aware previews, and smarter whitespace batching (newline flush, 500 ms grouping for spaces/tabs).
