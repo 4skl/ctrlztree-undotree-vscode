@@ -39,18 +39,16 @@ export class CtrlZTree {
         }
     }
 
-    private calculateHash(content: string): string {
-        return crypto.createHash('sha256').update(content).digest('hex');
+    private calculateHash(content: string, salt: string = ''): string {
+        return crypto.createHash('sha256').update(content + salt).digest('hex');
     }
 
     private reconstructContent(hash: string): string {
         const path = this.getPathToRoot(hash);
         let content = this.trueEmptyRootContent;
 
-        // Path is [target, parent, ..., root] - reverse it to [root, ..., parent, target]
         for (let i = path.length - 1; i >= 0; i--) {
             const node = this.nodes.get(path[i])!;
-            // Skip the root node (it has no diff and content is already empty)
             if (node === this.nodes.get(this.trueEmptyRootHash)) {
                 continue;
             }
@@ -65,8 +63,17 @@ export class CtrlZTree {
     private getPathToRoot(hash: string): string[] {
         const path: string[] = [];
         let currentHash = hash;
+        
+        // Failsafe cycle detector to completely prevent RangeError crashes
+        const visited = new Set<string>();
 
         while (currentHash) {
+            if (visited.has(currentHash)) {
+                console.error(`CtrlZTree: Cycle detected in tree at node ${currentHash}. Breaking loop.`);
+                break;
+            }
+            visited.add(currentHash);
+
             path.push(currentHash);
             const node = this.nodes.get(currentHash);
             if (!node || node.parent === null) {
@@ -79,23 +86,28 @@ export class CtrlZTree {
     }
 
     set(content: string, cursorPosition?: vscode.Position): string {
-        const newHash = this.calculateHash(content);
         const currentContent = this.head ? this.reconstructContent(this.head) : this.trueEmptyRootContent;
 
-        // Only move head to existing node if it's a valid child of current head
+        if (currentContent === content) {
+            if (cursorPosition && this.head) {
+                const headNode = this.nodes.get(this.head);
+                if (headNode) {
+                    headNode.cursorPosition = cursorPosition;
+                }
+            }
+            return this.head || this.trueEmptyRootHash;
+        }
+
+        let newHash = this.calculateHash(content);
+
+        // Prevent Hash Map Overwriting (Cycle Prevention)
         if (this.nodes.has(newHash)) {
             const existingNode = this.nodes.get(newHash)!;
-            // Verify the node is actually a child of the current head (or we're at root)
             if (existingNode.parent === this.head) {
                 this.head = newHash;
                 return newHash;
             }
-            // If the node exists but is not a valid child, fall through to create a new one
-        }
-
-        // Content is the same as current head - no change needed
-        if (currentContent === content && !cursorPosition) {
-            return this.head || this.trueEmptyRootHash;
+            newHash = this.calculateHash(content, Date.now().toString() + Math.random().toString());
         }
 
         const diffOps = generateDiff(currentContent, content);
@@ -126,7 +138,6 @@ export class CtrlZTree {
 
         const currentNode = this.nodes.get(this.head)!;
         
-        // Prevent undoing past the initial snapshot - don't go back before the file was opened
         if (this.head === this.initialSnapshotHash) {
             return null;
         }
@@ -139,22 +150,16 @@ export class CtrlZTree {
     }
 
     findLatestNonEmptyState(): string | null {
-        if (!this.head) {
-            return null;
-        }
+        if (!this.head) return null;
 
         const currentContent = this.getContent(this.head);
-        if (currentContent.trim() !== '') {
-            return this.head;
-        }
+        if (currentContent.trim() !== '') return this.head;
 
         let latestNonEmptyHash: string | null = null;
         let latestTimestamp = 0;
 
         for (const [hash, node] of this.nodes) {
-            if (hash === this.trueEmptyRootHash) {
-                continue;
-            }
+            if (hash === this.trueEmptyRootHash) continue;
 
             const content = this.getContent(hash);
             if (content.trim() !== '' && node.timestamp > latestTimestamp) {
@@ -176,9 +181,7 @@ export class CtrlZTree {
     }
 
     y(): string | string[] {
-        if (!this.head) {
-            return [];
-        }
+        if (!this.head) return [];
 
         const currentNode = this.nodes.get(this.head)!;
         if (currentNode.children.length === 1) {
@@ -228,59 +231,39 @@ export class CtrlZTree {
         return this.initialSnapshotHash ?? this.trueEmptyRootHash;
     }
 
-    /**
-     * Get the number of nodes in the history tree.
-     * Useful for monitoring memory usage.
-     */
     public getNodeCount(): number {
         return this.nodes.size;
     }
 
-    /**
-     * Prune the history tree to keep only the most recent nodes.
-     * This prevents unbounded memory growth for long-lived editors.
-     * Keeps all nodes on the path to the current head, plus recent leaf nodes.
-     */
     public pruneToMaxNodes(maxNodes: number): void {
-        if (this.nodes.size <= maxNodes) {
-            return;
-        }
+        if (this.nodes.size <= maxNodes) return;
 
-        // Always keep nodes on the path to root and the current head
         const nodesToKeep = new Set<string>();
 
-        // Keep the current head and all ancestors
         let currentHash = this.head;
         while (currentHash) {
             nodesToKeep.add(currentHash);
             const node = this.nodes.get(currentHash);
-            if (!node || node.parent === null) {
-                break;
-            }
+            if (!node || node.parent === null) break;
             currentHash = node.parent;
         }
 
-        // If we haven't reached maxNodes yet, keep the most recent leaf nodes
         if (nodesToKeep.size < maxNodes) {
             const allNodes = Array.from(this.nodes.entries());
             const sortedByTime = allNodes.sort((a, b) => b[1].timestamp - a[1].timestamp);
 
             for (const [hash] of sortedByTime) {
-                if (nodesToKeep.size >= maxNodes) {
-                    break;
-                }
+                if (nodesToKeep.size >= maxNodes) break;
                 nodesToKeep.add(hash);
             }
         }
 
-        // Remove nodes that are not in the keep set
         for (const hash of this.nodes.keys()) {
             if (!nodesToKeep.has(hash)) {
                 this.nodes.delete(hash);
             }
         }
 
-        // Clean up references to deleted nodes
         for (const node of this.nodes.values()) {
             node.children = node.children.filter(child => this.nodes.has(child));
         }

@@ -9,6 +9,11 @@ import { markEditorCleanIfAtInitialSnapshot } from './utils/editorState';
 
 const extensionState = createExtensionState();
 
+// Helper moved to top-level so it's available to commands and initialization
+function isTrackableDocument(document: vscode.TextDocument | undefined): document is vscode.TextDocument {
+    return !!document && (document.uri.scheme === 'file' || document.uri.scheme === 'untitled');
+}
+
 export function activate(context: vscode.ExtensionContext) {
     const outputChannel = vscode.window.createOutputChannel('CtrlZTree');
     context.subscriptions.push(outputChannel);
@@ -133,16 +138,33 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(themeChangeSubscription, activeEditorChangeSubscription, documentCloseSubscription);
+    // Listen for new files opening to track them immediately
+    const documentOpenSubscription = vscode.workspace.onDidOpenTextDocument(document => {
+        if (isTrackableDocument(document)) {
+            getOrCreateTree(document);
+        }
+    });
 
+    context.subscriptions.push(themeChangeSubscription, activeEditorChangeSubscription, documentCloseSubscription, documentOpenSubscription);
+
+    // Eagerly initialize trees for documents already open on startup
+    vscode.workspace.textDocuments.forEach(document => {
+        if (isTrackableDocument(document)) {
+            getOrCreateTree(document);
+        }
+    });
+
+    // Handle the currently active editor on startup
     if (vscode.window.activeTextEditor) {
         void webviewManager.handleActiveEditorChange(vscode.window.activeTextEditor);
     }
 
     const undoCommand = vscode.commands.registerCommand('ctrlztree.undo', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showInformationMessage('CtrlZTree: No active editor for undo.');
+        
+        // Pass through to native undo if no editor or untrackable document
+        if (!editor || !isTrackableDocument(editor.document)) {
+            await vscode.commands.executeCommand('undo');
             return;
         }
 
@@ -169,8 +191,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     const redoCommand = vscode.commands.registerCommand('ctrlztree.redo', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showInformationMessage('CtrlZTree: No active editor for redo.');
+        
+        // Pass through to native redo if no editor or untrackable document
+        if (!editor || !isTrackableDocument(editor.document)) {
+            await vscode.commands.executeCommand('redo');
             return;
         }
 
@@ -285,10 +309,6 @@ export function activate(context: vscode.ExtensionContext) {
         });
     }
 
-    function isTrackableDocument(document: vscode.TextDocument | undefined): document is vscode.TextDocument {
-        return !!document && (document.uri.scheme === 'file' || document.uri.scheme === 'untitled');
-    }
-
     const visualizeCommand = vscode.commands.registerCommand('ctrlztree.visualize', async (uri?: vscode.Uri) => {
         let preferredDocument: vscode.TextDocument | undefined;
 
@@ -389,6 +409,3 @@ function updatePanelForDocument(
         webviewManager.postUpdatesToWebview(panel, tree, docUriString);
     }
 }
-
-
-
