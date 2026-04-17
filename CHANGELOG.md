@@ -2,6 +2,20 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.7] - 2026-04-17
+
+### Fixed
+- **Critical: OOM Memory Leak in Diff Algorithm**: Replaced the memory-heavy O(N×M) 2D matrix dynamic programming in `lcs.ts` with a linear-space prefix/suffix stripping algorithm. Prevents the VS Code Extension Host from crashing (Out-Of-Memory) when editing large files.
+- **Critical: Infinite Loop (RangeError)**: Fixed a bug where navigating to a previous state and creating identical text could cause a hash collision, creating a cyclic graph in the tree history. Added cryptographic salt for collisions and a failsafe cycle detector to completely prevent `RangeError: Invalid array length` crashes.
+- **Single Character Undo Bug**: Fixed an issue where undoing all the way back in a newly created file left a single character behind. Implemented eager tree initialization upon document open to capture the true empty state.
+- **Native Undo Pass-Through**: The extension no longer blocks default undo/redo functionality in untracked editors (e.g., Jupyter Notebooks `.ipynb`, settings panels, and output logs). Native history is preserved for these files.
+
+### Technical Details
+- Replaced 2D array LCS with Myers-lite block replacement and prefix/suffix stripping.
+- Added `onDidOpenTextDocument` subscription and workspace iteration during `activate()` for eager tracking.
+- Added explicit `isTrackableDocument` checks to command registrations to fallback to native `undo`/`redo` commands.
+- Implemented `Set`-based cycle detection in `getPathToRoot`.
+
 ## [0.5.6] - 2026-03-31
 
 ### Fixed

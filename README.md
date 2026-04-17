@@ -11,6 +11,7 @@ CtrlZTree brings tree-based undo/redo functionality to VS Code, inspired by the 
 
 ### 🎯 Enhanced Undo/Redo
 - **Custom Undo/Redo**: Replaces VS Code's default Ctrl+Z/Ctrl+Y with tree-aware operations
+- **Native Pass-Through**: Smart detection for read-only editors, outputs, and Jupyter notebooks ensures native undo behavior isn't blocked in untracked contexts
 - **Alternative Keybinding**: Ctrl+Shift+Z (Cmd+Shift+Z on Mac) also works for redo operations
 - **Smart Undo Protection**: Initial file content is protected - can't undo past the state when file was opened
 - **Smart Empty File Undo**: When file is empty and you press Ctrl+Z, automatically jumps to the latest non-empty state
@@ -69,16 +70,17 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 5. **Other states** appear in blue with standard styling
 6. **Click any node** to navigate to that document state
 7. **Diff button** appears below the current active node (if it has a parent)
+
+## 📝 Recent Updates
+
 For full release notes see [CHANGELOG.md](CHANGELOG.md). Recent highlights:
 
+- **0.5.7 (2026-04-17)** — **Critical Fixes**: Fixed `RangeError` infinite loop crashes caused by hash collisions. Prevented OOM memory leaks on large files by switching to a prefix/suffix stripped block replacement diff. Single-character tracking bug resolved with eager document initialization. Native undo behavior preserved for untracked inputs like Jupyter Notebooks.
+- **0.5.6 (2026-03-31)** — Fixed dynamic programming array lookahead bugs, hash collisions, tree resets, and refined algorithm performance.
 - **0.5.5 (2026-03-31)** — Quality & robustness improvements: automatic history pruning with configurable limits (1000 nodes per document, 100 documents max), strict input validation for diff deserialization, code consolidation eliminating duplicate formatting functions, improved error handling with proper type safety, and memory leak prevention with automatic document cleanup.
 - **0.5.4 (2025-12-08)** — Startup activation via `onStartupFinished` (plus `onEditSession` and commands) so change tracking and commands are ready as soon as VS Code launches restored editors.
 - **0.5.3 (2025-12-02)** — Visualize command auto-resolves a document even before an editor is active; root and baseline always visible with undo back to empty; smarter panel targeting, clean-state detection, and a webview bootstrap handshake.
 - **0.5.2 (2025-12-01)** — Root-state undo protection, diff-only node storage with whitespace-aware previews, and smarter whitespace batching (newline flush, 500 ms grouping for spaces/tabs).
-- **0.5.1 (2025-11-30)** — Packaging fix ensures webview HTML/CSS/JS ship inside the VSIX.
-- **0.5.0 (2025-11-29)** — Webview layout & styling fixes; project files updated for better project management.
-- **0.4.1** — First-node snapshot fix (initial node stores full content).
-- **0.4.0** — Floating diff button and automatic cleanup; improved diff UX.
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
@@ -107,31 +109,3 @@ CtrlZTree provides configurable settings to control memory usage and pruning beh
   "ctrlztree.maxHistoryNodesPerDocument": 500,
   "ctrlztree.maxTrackedDocuments": 50
 }
-```
-
-## 🤝 Contributing
-
-We welcome contributions! This extension is under active development and there are many opportunities to help:
-
-- **Bug Reports**: Found an issue? Please report it with steps to reproduce
-- **Feature Requests**: Have ideas for improvements? We'd love to hear them
-- **Code Contributions**: Check the planned features list for areas to contribute
-- **Documentation**: Help improve this README or add code documentation
-
-## 📚 Technical Details
-
-### Architecture
-- **Tree Storage**: Each document maintains a `CtrlZTree` instance with SHA-256 hashed nodes
-- **Diff Engine**: Custom LCS (Longest Common Subsequence) algorithm for efficient change tracking  
-- **Visualization**: Uses vis-network library for interactive graph rendering
-- **State Management**: Centralized tracking of document trees and visualization panels
-
-## 📖 References
-
-- [VS Code Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-- [Vim UndoTree Plugin](https://github.com/mbbill/undotree)
-- [VS Code Extension API](https://code.visualstudio.com/api)
-
----
-
-**Enjoy enhanced undo/redo with CtrlZTree! 🌳**
