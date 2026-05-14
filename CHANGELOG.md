@@ -2,6 +2,13 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.8] - 2026-05-14
+
+### Fixed
+- **Cursor Jump and Scroll Loss**: Replaced full-document string replacement with "Minimal Edits" using `vscode.WorkspaceEdit`. Undo/Redo now only modifies the exact changed characters, preserving active text selections, cursor positions, folding states, and preventing violent viewport scrolling.
+- **URI Length Limit Crash**: Fixed a bug where opening a diff for massive files crashed the extension or diff viewer due to OS-level URI query length limits. The diff provider now dynamically fetches content using a lightweight JSON payload (`docUri` and `hash`).
+- **Redo State Desync**: Refactored the tree's `y()` (redo) function to be a pure peek operation. This prevents the internal tree data structure from decoupling from the VS Code editor state if an edit application is rejected or fails.
+
 ## [0.5.7] - 2026-04-17
 
 ### Fixed

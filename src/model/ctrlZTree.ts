@@ -185,8 +185,7 @@ export class CtrlZTree {
 
         const currentNode = this.nodes.get(this.head)!;
         if (currentNode.children.length === 1) {
-            this.head = currentNode.children[0];
-            return this.head;
+            return currentNode.children[0];
         }
         return currentNode.children;
     }

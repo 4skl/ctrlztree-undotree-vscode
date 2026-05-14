@@ -1,5 +1,5 @@
 ﻿import * as vscode from 'vscode';
-import { generateDiffSummary } from './lcs';
+import { generateDiffSummary, generateDiff } from './lcs';
 import { CtrlZTree } from './model/ctrlZTree';
 import { createExtensionState } from './state/extensionState';
 import { DIFF_SCHEME, ACTION_TIMEOUT, PAUSE_THRESHOLD } from './constants';
@@ -23,7 +23,18 @@ export function activate(context: vscode.ExtensionContext) {
 
     const diffContentProvider = new (class implements vscode.TextDocumentContentProvider {
         provideTextDocumentContent(uri: vscode.Uri): string {
-            return uri.query;
+            try {
+                // Parse the payload we attached to the query
+                const payload = JSON.parse(uri.query);
+                if (payload.docUri && payload.hash) {
+                    const tree = extensionState.historyTrees.get(payload.docUri);
+                    return tree?.getContent(payload.hash) || '';
+                }
+            } catch {
+                // Fallback for safety
+                return decodeURIComponent(uri.query);
+            }
+            return '';
         }
     })();
 
@@ -355,26 +366,50 @@ async function applyTreeStateToDocument(
 ): Promise<void> {
     onStart();
     try {
-        const content = tree.getContent();
+        const currentContent = document.getText();
+        const targetContent = tree.getContent();
         const cursorPosition = tree.getCursorPosition();
-        const edit = new vscode.WorkspaceEdit();
-        // Create range for the entire document: from line 0 to the end of the last line
-        const lastLineIndex = Math.max(0, document.lineCount - 1);
-        const endChar = document.lineCount === 0 ? 0 : document.lineAt(lastLineIndex).text.length;
-        const fullRange = new vscode.Range(0, 0, lastLineIndex, endChar);
-        edit.replace(document.uri, fullRange, content);
-        await vscode.workspace.applyEdit(edit);
 
+        // 1. Calculate Minimal Edits
+        if (currentContent !== targetContent) {
+            const edit = new vscode.WorkspaceEdit();
+            const diffs = generateDiff(currentContent, targetContent);
+            
+            for (const op of diffs) {
+                if (op.type === 'remove') {
+                    // document.positionAt effortlessly converts string indices to Line/Char
+                    const startPos = document.positionAt(op.position);
+                    const endPos = document.positionAt(op.position + op.length!);
+                    edit.delete(document.uri, new vscode.Range(startPos, endPos));
+                } else if (op.type === 'add') {
+                    const startPos = document.positionAt(op.position);
+                    edit.insert(document.uri, startPos, op.content!);
+                }
+            }
+            
+            await vscode.workspace.applyEdit(edit);
+        }
+
+        // 2. Smoothly Restore Cursor Position
         if (cursorPosition) {
-            const maxLine = document.lineCount - 1;
+            const maxLine = Math.max(0, document.lineCount - 1);
             const adjustedLine = Math.min(cursorPosition.line, maxLine);
             const maxChar = document.lineAt(adjustedLine).text.length;
             const adjustedChar = Math.min(cursorPosition.character, maxChar);
             const adjustedPosition = new vscode.Position(adjustedLine, adjustedChar);
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document.uri.toString() === document.uri.toString()) {
+            
+            // Check all visible editors in case the target is open in a split pane
+            const editor = vscode.window.visibleTextEditors.find(
+                e => e.document.uri.toString() === document.uri.toString()
+            );
+            
+            if (editor) {
                 editor.selection = new vscode.Selection(adjustedPosition, adjustedPosition);
-                editor.revealRange(new vscode.Range(adjustedPosition, adjustedPosition));
+                // Use InCenterIfOutsideViewport to prevent violent scrolling
+                editor.revealRange(
+                    new vscode.Range(adjustedPosition, adjustedPosition),
+                    vscode.TextEditorRevealType.InCenterIfOutsideViewport
+                );
             }
         }
     } catch (error) {

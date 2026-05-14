@@ -528,8 +528,11 @@ export function createWebviewManager({
             const parentShortHash = node.parent.substring(0, 8);
             const fileName = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString)?.uri.path.split(/[\\/]/).pop() || 'document';
 
-            const parentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${parentShortHash}?${encodeURIComponent(parentContent)}`);
-            const currentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${shortHash}?${encodeURIComponent(currentContent)}`);
+            const parentQuery = encodeURIComponent(JSON.stringify({ docUri: docUriString, hash: node.parent }));
+            const currentQuery = encodeURIComponent(JSON.stringify({ docUri: docUriString, hash: fullHash }));
+
+            const parentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${parentShortHash}?${parentQuery}`);
+            const currentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${shortHash}?${currentQuery}`);
 
             if (state.lastOpenedDiffEditor && !state.lastOpenedDiffEditor.document.isClosed) {
                 const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs);
