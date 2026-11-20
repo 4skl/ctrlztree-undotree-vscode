@@ -75,6 +75,7 @@ Instead of storing complete document copies, CtrlZTree uses intelligent diff alg
 
 For full release notes see [CHANGELOG.md](CHANGELOG.md). Recent highlights:
 
+- **0.5.9 (2026-11-20)** — **Quality & Reliability**: Added 12 comprehensive unit tests for the CtrlZTree model. Optimized `findLatestNonEmptyState()` with a fast diff-length heuristic. Added input validation for pruning. Migrated test runner to `@vscode/test-electron`. Updated VS Code engine to ^1.85.0.
 - **0.5.8 (2026-05-14)** — **Core UX & Stability Fixes**: Eliminated cursor jumping and scroll loss during Undo/Redo by implementing minimal character-level edits via `vscode.WorkspaceEdit`. Fixed URI length limit crashes for diffs on massive files. Prevented internal state desyncs if an edit fails to apply.
 - **0.5.7 (2026-04-17)** — **Critical Fixes**: Fixed `RangeError` infinite loop crashes caused by hash collisions. Prevented OOM memory leaks on large files by switching to a prefix/suffix stripped block replacement diff. Single-character tracking bug resolved with eager document initialization. Native undo behavior preserved for untracked inputs like Jupyter Notebooks.
 - **0.5.6 (2026-03-31)** — Fixed dynamic programming array lookahead bugs, hash collisions, tree resets, and refined algorithm performance.

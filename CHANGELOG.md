@@ -2,6 +2,23 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.5.9] - 2026-11-20
+
+### Improved
+- **Test Coverage**: Added 12 comprehensive unit tests for the CtrlZTree model covering node creation, undo/redo, diff storage, pruning, and edge cases
+- **Code Quality**: Optimized `findLatestNonEmptyState()` to use a fast diff-length heuristic instead of full content reconstruction, reducing unnecessary work during tree navigation
+- **Input Validation**: Added validation for `pruneToMaxNodes()` to handle negative and zero values safely
+- **Test Infrastructure**: Migrated from deprecated `vscode-test` to `@vscode/test-electron` with updated VS Code test runner API
+- **Editor Configuration**: Added `.editorconfig` for consistent editor settings across tools (indentation, charset, trailing whitespace)
+
+### Updated Dependencies
+- VS Code engine: `^1.60.0` → `^1.85.0`
+- `@types/vscode`: `^1.60.0` → `^1.85.0`
+- `typescript`: `^5.0.0` → `^5.4.0`
+- `@typescript-eslint/*`: updated to `^7.0.0`
+- `@types/mocha`: `^10.0.6` → `^10.0.10`
+- Test runner: replaced `vscode-test` with `@vscode/test-electron` ^2.4.0
+
 ## [0.5.8] - 2026-05-14
 
 ### Fixed

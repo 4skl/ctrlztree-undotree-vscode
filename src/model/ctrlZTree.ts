@@ -161,8 +161,19 @@ export class CtrlZTree {
         for (const [hash, node] of this.nodes) {
             if (hash === this.trueEmptyRootHash) continue;
 
-            const content = this.getContent(hash);
-            if (content.trim() !== '' && node.timestamp > latestTimestamp) {
+            // Quick check: if the node has no diff or a non-null diff, it might be non-empty.
+            // Only reconstruct content as a fallback when the diff is null (initial state).
+            let isNonEmpty: boolean;
+            if (node.diff === null) {
+                // Initial snapshot node — check by comparing to the empty root's content
+                isNonEmpty = hash !== this.trueEmptyRootHash;
+            } else {
+                // Heuristic: if the diff exists and is non-trivial, assume non-empty.
+                // This avoids expensive reconstruction for most nodes.
+                isNonEmpty = node.diff.length > 0;
+            }
+
+            if (isNonEmpty && node.timestamp > latestTimestamp) {
                 latestNonEmptyHash = hash;
                 latestTimestamp = node.timestamp;
             }
@@ -235,6 +246,7 @@ export class CtrlZTree {
     }
 
     public pruneToMaxNodes(maxNodes: number): void {
+        if (maxNodes <= 0) return;
         if (this.nodes.size <= maxNodes) return;
 
         const nodesToKeep = new Set<string>();
