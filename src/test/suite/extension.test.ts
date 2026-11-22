@@ -107,4 +107,20 @@ suite('CtrlZTree Model Tests', () => {
 		assert.strictEqual(tree.setHead(hash), true);
 		assert.strictEqual(tree.getHead(), hash);
 	});
+
+	test('pruning keeps node count bounded and every parent available', () => {
+		const tree = new CtrlZTree('initial');
+		for (let i = 0; i < 20; i++) {
+			tree.set(`content ${i}`);
+		}
+		tree.pruneToMaxNodes(5);
+		assert.ok(tree.getNodeCount() <= 5);
+
+		for (const [hash, node] of tree.getAllNodes()) {
+			if (node.parent) {
+				assert.ok(tree.getAllNodes().has(node.parent), `dangling parent for ${hash}`);
+			}
+			assert.doesNotThrow(() => tree.getContent(hash));
+		}
+	});
 });

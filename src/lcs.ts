@@ -1,4 +1,6 @@
-// Character-based diff operations - optimized for memory efficiency
+/**
+ * Character-based diff operations - optimized for memory efficiency
+ */
 export interface DiffOperation {
     type: 'keep' | 'add' | 'remove';
     position: number;
@@ -6,6 +8,12 @@ export interface DiffOperation {
     content?: string; // Only for 'add' operations
 }
 
+/**
+ * Generate a diff between two strings using a prefix/suffix stripping approach
+ * @param input1 - The original string
+ * @param input2 - The modified string
+ * @returns Array of diff operations
+ */
 export function generateDiff(input1: string, input2: string): DiffOperation[] {
     const operations: DiffOperation[] = [];
     
@@ -86,8 +94,25 @@ export function serializeDiff(operations: DiffOperation[]): string {
 export function deserializeDiff(diffStr: string): DiffOperation[] {
     try {
         const operations = JSON.parse(diffStr);
-        if (!Array.isArray(operations)) throw new Error('Deserialized diff is not an array');
-        // (Skipped verbose validation to keep it brief, but your old validation is fine here too)
+        if (!Array.isArray(operations)) {throw new Error('Deserialized diff is not an array');}
+        for (const operation of operations) {
+            if (!operation || typeof operation !== 'object') {
+                throw new Error('Diff operation must be an object');
+            }
+            if (operation.type !== 'keep' && operation.type !== 'add' && operation.type !== 'remove') {
+                throw new Error('Invalid diff operation type');
+            }
+            if (!Number.isInteger(operation.position) || operation.position < 0) {
+                throw new Error('Invalid diff operation position');
+            }
+            if ((operation.type === 'keep' || operation.type === 'remove') &&
+                (!Number.isInteger(operation.length) || operation.length < 0)) {
+                throw new Error('Invalid diff operation length');
+            }
+            if (operation.type === 'add' && typeof operation.content !== 'string') {
+                throw new Error('Invalid diff addition content');
+            }
+        }
         return operations;
     } catch (error) {
         throw new Error(`Failed to deserialize diff: ${error instanceof Error ? error.message : String(error)}`);

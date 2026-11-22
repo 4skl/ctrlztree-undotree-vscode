@@ -10,11 +10,18 @@
 </head>
 <body>
     <div id="toolbar">
-        <button id="reload-btn" class="toolbar-btn" title="Reload Tree Visualization">🔄 Reload</button>
-        <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">🧽 Reset</button>
+        <div id="toolbar-left">
+            <span id="document-title" class="toolbar-title"></span>
+        </div>
+        <div id="toolbar-right">
+            <input type="text" id="search-input" class="search-input" placeholder="Search nodes…" autocomplete="off" spellcheck="false">
+            <button id="fit-button" class="toolbar-btn" title="Fit the complete tree in view">Fit</button>
+            <button id="reset-btn" class="toolbar-btn" title="Reset Tree (Start Fresh from Current State)">Reset</button>
+        </div>
     </div>
     <div id="tree-visualization">
-        <button id="diff-button">📊 View Diff</button>
+        <button id="diff-button" title="Open the selected node's diff from its parent">📊 View Diff</button>
+        <div id="status-bar" title="Head is the current editor state. Click a node to view its diff; double-click to restore that state.">Loading history…</div>
     </div>
     <script src="%SCRIPT_URI%"></script>
 </body>

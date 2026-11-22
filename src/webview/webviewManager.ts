@@ -16,6 +16,7 @@ interface ManagerDeps {
 export interface WebviewManager {
     postUpdatesToWebview(panel: vscode.WebviewPanel, tree: CtrlZTree, documentUriString: string): void;
     showVisualizationForDocument(documentToShow?: vscode.TextDocument): Promise<void>;
+    showVisualizationForTree(tree: CtrlZTree, docUriString: string, title: string): Promise<void>;
     broadcastThemeRefresh(): void;
     handleActiveEditorChange(editor: vscode.TextEditor | undefined): Promise<void>;
 }
@@ -29,6 +30,8 @@ export function createWebviewManager({
 }: ManagerDeps): WebviewManager {
     const { activeVisualizationPanels, panelToFullHashMap, historyTrees, lastChangeTime, lastCursorPosition, lastChangeType, pendingChanges, documentChangeTimeouts } = state;
     const panelDocumentContexts = new Map<vscode.WebviewPanel, { docUriString: string; document: vscode.TextDocument }>();
+    let persistentPanel: vscode.WebviewPanel | null = null;
+    let persistentPanelDocUriString: string | null = null;
 
     function formatTimeAgo(timestamp: number): string {
         const now = Date.now();
@@ -247,6 +250,8 @@ export function createWebviewManager({
             return;
         }
 
+        const fileName = documentUriString.split(/[\\/]/).pop()?.split(':')[0] || 'document';
+
         const nodes = tree.getAllNodes();
         const internalRootHash = tree.getInternalRootHash();
         const initialSnapshotHash = tree.getInitialSnapshotHash();
@@ -256,16 +261,33 @@ export function createWebviewManager({
         const currentHeadFullHash = tree.getHead();
         let currentHeadShortHash: string | null = null;
 
+        const fullHashes = Array.from(nodes.keys());
+        const shortHashForFullHash = new Map<string, string>();
+        for (const fullHash of fullHashes) {
+            let length = 8;
+            let displayHash = fullHash.substring(0, length);
+            while (length < fullHash.length) {
+                const matches = fullHashes.filter(otherHash => otherHash.substring(0, length) === displayHash);
+                if (matches.length === 1) {
+                    break;
+                }
+                length = Math.min(fullHash.length, length + 8);
+                displayHash = fullHash.substring(0, length);
+            }
+            shortHashForFullHash.set(fullHash, displayHash);
+        }
+
         if (currentHeadFullHash) {
-            currentHeadShortHash = currentHeadFullHash.substring(0, 8);
+            currentHeadShortHash = shortHashForFullHash.get(currentHeadFullHash) ?? currentHeadFullHash;
         }
 
         nodes.forEach((node, fullHash) => {
-            const shortHash = fullHash.substring(0, 8);
+            const shortHash = shortHashForFullHash.get(fullHash) ?? fullHash;
             currentFullHashMap.set(shortHash, fullHash);
 
             const isInternalRoot = fullHash === internalRootHash;
             const isInitialSnapshot = initialSnapshotHash !== null && fullHash === initialSnapshotHash;
+            const isHead = fullHash === currentHeadFullHash;
 
             const diffPreview = isInitialSnapshot
                 ? { label: 'Root (initial document state)', tooltip: 'Document content when CtrlZTree started tracking this file' }
@@ -277,19 +299,54 @@ export function createWebviewManager({
             const previewLabel = diffPreview.label || 'No textual changes';
             const previewTooltip = diffPreview.tooltip || previewLabel;
             const timeAgo = formatTimeAgo(node.timestamp);
+            const liteDiffSummary = truncateInlineText(
+                previewLabel.replace(/\s*\n\s*/g, ' · ').replace(/\s+/g, ' ').trim(),
+                72
+            );
+
+            // Get first line of content for richer node label
+            let firstLine = '';
+            try {
+                const content = tree.getContent(fullHash);
+                const trimmed = content.trim();
+                if (trimmed) {
+                    const firstNewline = content.indexOf('\n');
+                    firstLine = firstNewline >= 0 ? content.substring(0, firstNewline).trim() : trimmed.substring(0, 60);
+                    if (content.length > 60 && firstNewline < 0) {
+                        firstLine = firstLine.substring(0, 57) + '...';
+                    }
+                }
+            } catch {
+                // ignore content extraction errors
+            }
+
+            // Determine node category for styling
+            let category: 'root' | 'initial' | 'regular' | 'head';
+            if (isInternalRoot) {category = 'root';}
+            else if (isInitialSnapshot) {category = 'initial';}
+            else if (isHead) {category = 'head';}
+            else {category = 'regular';}
+
             const hasParent = node.parent !== null;
 
             nodesArrayForVis.push({
                 id: shortHash,
-                label: `${timeAgo}\n${shortHash}\n${previewLabel}`,
-                title: `${timeAgo}\nHash: ${shortHash}\n${previewTooltip}`,
+                label: shortHash,
+                caption: `${timeAgo}\n${liteDiffSummary}`,
+                title: `${shortHash} — ${timeAgo}\n${previewTooltip}`,
                 hasParent,
-                baseLabel: `${timeAgo}\n${shortHash}\n${previewLabel}`
+                category,
+                firstLine,
+                previewLabel,
+                timeAgo,
+                shortHash,
+                fullHash,
+                childrenCount: node.children.length
             });
 
             if (node.parent) {
                 edgesArrayForVis.push({
-                    from: node.parent.substring(0, 8),
+                    from: shortHashForFullHash.get(node.parent) ?? node.parent,
                     to: shortHash
                 });
             }
@@ -301,7 +358,8 @@ export function createWebviewManager({
             command: 'updateTree',
             nodes: nodesArrayForVis,
             edges: edgesArrayForVis,
-            headShortHash: currentHeadShortHash
+            headShortHash: currentHeadShortHash,
+            documentName: fileName
         });
 
         if (success) {
@@ -390,29 +448,24 @@ export function createWebviewManager({
         }
 
         state.lastValidEditorUri = targetDocument.uri.toString();
-
-        const editor = targetDocument;
-        const docUriString = editor.uri.toString();
-        const existingPanel = activeVisualizationPanels.get(docUriString);
-        let fileName = editor.uri.path.split(/[\\/]/).pop() || 'Untitled';
+        const docUriString = targetDocument.uri.toString();
+        const tree = getOrCreateTree(targetDocument);
+        let fileName = targetDocument.uri.path.split(/[\\/]/).pop() || 'Untitled';
         if (!fileName || fileName.trim() === '') {
             fileName = 'Untitled';
         }
 
-        if (existingPanel && isPanelValid(existingPanel) && typeof existingPanel.reveal === 'function') {
-            existingPanel.title = `CtrlZTree ${fileName}`;
-            const tree = getOrCreateTree(editor);
-            updatePanelDocumentContext(existingPanel, editor);
-            postUpdatesToWebview(existingPanel, tree, docUriString);
-            existingPanel.reveal(vscode.ViewColumn.Beside, false);
+        // Use persistent panel if available and valid
+        if (persistentPanel && isPanelValid(persistentPanel)) {
+            persistentPanel.title = `CtrlZTree ${fileName}`;
+            updatePanelDocumentContext(persistentPanel, targetDocument);
+            persistentPanelDocUriString = docUriString;
+            postUpdatesToWebview(persistentPanel, tree, docUriString);
+            persistentPanel.reveal(vscode.ViewColumn.Beside, false);
             return;
         }
 
-        if (existingPanel && !isPanelValid(existingPanel)) {
-            activeVisualizationPanels.delete(docUriString);
-        }
-
-        getOrCreateTree(editor);
+        // Create new persistent panel
         const panel = vscode.window.createWebviewPanel(
             'ctrlzTreeVisualization',
             `CtrlZTree ${fileName}`,
@@ -426,8 +479,9 @@ export function createWebviewManager({
                 retainContextWhenHidden: true
             }
         );
-        activeVisualizationPanels.set(docUriString, panel);
-        updatePanelDocumentContext(panel, editor);
+        persistentPanel = panel;
+        persistentPanelDocUriString = docUriString;
+        updatePanelDocumentContext(panel, targetDocument);
         panel.webview.html = await getWebviewContent(panel.webview, fileName);
 
         panel.onDidChangeViewState(
@@ -439,8 +493,7 @@ export function createWebviewManager({
                 const { docUriString } = panelContext;
                 if (e.webviewPanel.visible) {
                     const currentTree = historyTrees.get(docUriString);
-                    const currentPanel = activeVisualizationPanels.get(docUriString);
-                    if (currentTree && currentPanel && currentPanel === panel) {
+                    if (currentTree) {
                         postUpdatesToWebview(panel, currentTree, docUriString);
                     }
                 }
@@ -487,16 +540,123 @@ export function createWebviewManager({
 
         panel.onDidDispose(
             () => {
-                const panelContext = getPanelDocumentContext(panel);
-                if (panelContext) {
-                    activeVisualizationPanels.delete(panelContext.docUriString);
-                    panelDocumentContexts.delete(panel);
-                }
+                persistentPanel = null;
+                persistentPanelDocUriString = null;
+                panelDocumentContexts.delete(panel);
                 panelToFullHashMap.delete(panel);
             },
             null,
             context.subscriptions
         );
+    }
+
+    async function showVisualizationForTree(tree: CtrlZTree, docUriString: string, title: string) {
+        // Use persistent panel if available and valid
+        if (persistentPanel && isPanelValid(persistentPanel)) {
+            let fileName = docUriString.split(/[\\/]/).pop() || 'document';
+            if (!fileName || fileName.trim() === '') {
+                fileName = 'document';
+            }
+            persistentPanel.title = `CtrlZTree ${title}`;
+            persistentPanelDocUriString = docUriString;
+            postUpdatesToWebview(persistentPanel, tree, docUriString);
+            persistentPanel.reveal(vscode.ViewColumn.Beside, false);
+            return;
+        }
+
+        // Create new panel
+        const panel = vscode.window.createWebviewPanel(
+            'ctrlzTreeVisualization',
+            `CtrlZTree ${title}`,
+            vscode.ViewColumn.Beside,
+            {
+                enableScripts: true,
+                localResourceRoots: [
+                    vscode.Uri.joinPath(context.extensionUri, 'resources'),
+                    vscode.Uri.joinPath(context.extensionUri, 'src', 'webview')
+                ],
+                retainContextWhenHidden: true
+            }
+        );
+        persistentPanel = panel;
+        persistentPanelDocUriString = docUriString;
+
+        const targetDocument = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === docUriString);
+        if (targetDocument) {
+            updatePanelDocumentContext(panel, targetDocument);
+        }
+        let fn = docUriString.split(/[\\/]/).pop() || 'document';
+        if (!fn || fn.trim() === '') {
+            fn = 'document';
+        }
+        panel.webview.html = await getWebviewContent(panel.webview, fn);
+
+        panel.onDidChangeViewState(
+            e => {
+                const panelContext = getPanelDocumentContext(panel);
+                if (!panelContext) {
+                    return;
+                }
+                const { docUriString } = panelContext;
+                if (e.webviewPanel.visible) {
+                    const currentTree = historyTrees.get(docUriString);
+                    if (currentTree) {
+                        postUpdatesToWebview(panel, currentTree, docUriString);
+                    }
+                }
+            },
+            null,
+            context.subscriptions
+        );
+
+        panel.webview.onDidReceiveMessage(
+            async message => {
+                const panelContext = getPanelDocumentContext(panel);
+                if (!panelContext) {
+                    outputChannel.appendLine('CtrlZTree: No panel context available for message handling.');
+                    return;
+                }
+                const { docUriString, document: contextDocument } = panelContext;
+                switch (message.command) {
+                    case 'webviewReady': {
+                        const currentTree = historyTrees.get(docUriString) ?? getOrCreateTree(contextDocument);
+                        postUpdatesToWebview(panel, currentTree, docUriString);
+                        return;
+                    }
+                    case 'openDiff':
+                        await handleOpenDiff(message.shortHash, docUriString, panel);
+                        return;
+                    case 'navigateToNode':
+                        await handleNavigateToNode(message.shortHash, docUriString, panel);
+                        return;
+                    case 'requestTreeReload':
+                        handleTreeReload(docUriString, panel);
+                        return;
+                    case 'requestTreeReset':
+                        handleTreeReset(docUriString, panel);
+                        return;
+                    case 'webviewError':
+                        outputChannel.appendLine(`CtrlZTree: Webview CRITICAL ERROR: ${message.error.message} Stack: ${message.error.stack}`);
+                        vscode.window.showErrorMessage(`CtrlZTree Webview Critical Error: ${message.error.message}. Check CtrlZTree output channel.`);
+                        return;
+                }
+            },
+            undefined,
+            context.subscriptions
+        );
+
+        panel.onDidDispose(
+            () => {
+                persistentPanel = null;
+                persistentPanelDocUriString = null;
+                panelDocumentContexts.delete(panel);
+                panelToFullHashMap.delete(panel);
+            },
+            null,
+            context.subscriptions
+        );
+
+        postUpdatesToWebview(panel, tree, docUriString);
     }
 
     async function handleOpenDiff(shortHash: string, docUriString: string, panel: vscode.WebviewPanel) {
@@ -534,14 +694,6 @@ export function createWebviewManager({
             const parentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${parentShortHash}?${parentQuery}`);
             const currentUri = vscode.Uri.parse(`${DIFF_SCHEME}:${fileName} @ ${shortHash}?${currentQuery}`);
 
-            if (state.lastOpenedDiffEditor && !state.lastOpenedDiffEditor.document.isClosed) {
-                const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs);
-                const diffTab = tabs.find(tab => tab.input instanceof vscode.TabInputTextDiff && (tab.input.original.scheme === DIFF_SCHEME || tab.input.modified.scheme === DIFF_SCHEME));
-                if (diffTab) {
-                    await vscode.window.tabGroups.close(diffTab);
-                }
-            }
-
             await vscode.commands.executeCommand(
                 'vscode.diff',
                 parentUri,
@@ -549,7 +701,8 @@ export function createWebviewManager({
                 `${fileName}: ${parentShortHash} ↔ ${shortHash}`,
                 {
                     viewColumn: vscode.ViewColumn.Beside,
-                    preview: false
+                    preview: true,
+                    preserveFocus: true
                 }
             );
 
@@ -785,6 +938,7 @@ export function createWebviewManager({
     return {
         postUpdatesToWebview,
         showVisualizationForDocument,
+        showVisualizationForTree,
         broadcastThemeRefresh,
         handleActiveEditorChange
     };

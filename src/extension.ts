@@ -239,11 +239,34 @@ export function activate(context: vscode.ExtensionContext) {
             };
         });
 
+        // Add tree visualization option
+        items.push({
+            label: '$(graph) View Branch Tree',
+            description: 'Open the tree visualization for this branch',
+            hash: '__view_tree__'
+        });
+
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: 'Select branch to restore'
         });
 
         if (!selected) {
+            return;
+        }
+
+        // Handle tree visualization option
+        if (selected.hash === '__view_tree__') {
+            // Build a temporary tree from the redo branches for visualization
+            const tempTree = new CtrlZTree(currentContent);
+            for (const hash of redoResult) {
+                const branchContent = tree.getContent(hash);
+                tempTree.set(branchContent);
+            }
+            await webviewManager.showVisualizationForTree(
+                tempTree,
+                document.uri.toString(),
+                `Branch Tree (${redoResult.length} states)`
+            );
             return;
         }
 

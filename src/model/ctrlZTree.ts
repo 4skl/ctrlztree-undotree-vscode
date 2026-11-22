@@ -11,6 +11,9 @@ export interface TreeNode {
     cursorPosition?: vscode.Position;
 }
 
+/**
+ * CtrlZTree class represents the history tree for a document
+ */
 export class CtrlZTree {
     private nodes: Map<string, TreeNode>;
     private head: string | null;
@@ -18,6 +21,10 @@ export class CtrlZTree {
     private readonly trueEmptyRootHash: string;
     private initialSnapshotHash?: string;
 
+    /**
+     * Create a new CtrlZTree instance
+     * @param initialDocumentContent - The initial content of the document
+     */
     constructor(initialDocumentContent: string) {
         this.nodes = new Map<string, TreeNode>();
         this.trueEmptyRootHash = this.calculateHash(this.trueEmptyRootContent);
@@ -39,10 +46,21 @@ export class CtrlZTree {
         }
     }
 
+    /**
+     * Calculate SHA-256 hash of content with optional salt
+     * @param content - Content to hash
+     * @param salt - Optional salt for hashing
+     * @returns SHA-256 hash as hex string
+     */
     private calculateHash(content: string, salt: string = ''): string {
         return crypto.createHash('sha256').update(content + salt).digest('hex');
     }
 
+    /**
+     * Reconstruct document content from a specific node
+     * @param hash - Hash of the node to reconstruct from
+     * @returns Reconstructed content
+     */
     private reconstructContent(hash: string): string {
         const path = this.getPathToRoot(hash);
         let content = this.trueEmptyRootContent;
@@ -60,6 +78,11 @@ export class CtrlZTree {
         return content;
     }
 
+    /**
+     * Get path from a node to the root
+     * @param hash - Hash of the node to start from
+     * @returns Array of hashes from node to root
+     */
     private getPathToRoot(hash: string): string[] {
         const path: string[] = [];
         let currentHash = hash;
@@ -85,6 +108,12 @@ export class CtrlZTree {
         return path;
     }
 
+    /**
+     * Set document content and create a new node in the tree
+     * @param content - New document content
+     * @param cursorPosition - Optional cursor position to store
+     * @returns Hash of the new node
+     */
     set(content: string, cursorPosition?: vscode.Position): string {
         const currentContent = this.head ? this.reconstructContent(this.head) : this.trueEmptyRootContent;
 
@@ -131,6 +160,10 @@ export class CtrlZTree {
         return newHash;
     }
 
+    /**
+     * Undo operation - move to parent node
+     * @returns Hash of the new head node, or null if no parent
+     */
     z(): string | null {
         if (!this.head) {
             return null;
@@ -149,17 +182,21 @@ export class CtrlZTree {
         return null;
     }
 
+    /**
+     * Find the latest non-empty state in the tree
+     * @returns Hash of the latest non-empty state, or null if not found
+     */
     findLatestNonEmptyState(): string | null {
-        if (!this.head) return null;
+        if (!this.head) {return null;}
 
         const currentContent = this.getContent(this.head);
-        if (currentContent.trim() !== '') return this.head;
+        if (currentContent.trim() !== '') {return this.head;}
 
         let latestNonEmptyHash: string | null = null;
         let latestTimestamp = 0;
 
         for (const [hash, node] of this.nodes) {
-            if (hash === this.trueEmptyRootHash) continue;
+            if (hash === this.trueEmptyRootHash) {continue;}
 
             // Quick check: if the node has no diff or a non-null diff, it might be non-empty.
             // Only reconstruct content as a fallback when the diff is null (initial state).
@@ -182,6 +219,10 @@ export class CtrlZTree {
         return latestNonEmptyHash;
     }
 
+    /**
+     * Undo to the latest non-empty state
+     * @returns Hash of the new head node, or null if no change
+     */
     zToLatestNonEmpty(): string | null {
         const latestNonEmpty = this.findLatestNonEmptyState();
         if (latestNonEmpty && latestNonEmpty !== this.head) {
@@ -191,8 +232,12 @@ export class CtrlZTree {
         return null;
     }
 
+    /**
+     * Redo operation - move to child node(s)
+     * @returns Hash of single child node if only one child, or array of child hashes if multiple
+     */
     y(): string | string[] {
-        if (!this.head) return [];
+        if (!this.head) {return [];}
 
         const currentNode = this.nodes.get(this.head)!;
         if (currentNode.children.length === 1) {
@@ -201,10 +246,19 @@ export class CtrlZTree {
         return currentNode.children;
     }
 
+    /**
+     * Get the current head node hash
+     * @returns Hash of the current head node, or null if no head
+     */
     getHead(): string | null {
         return this.head;
     }
 
+    /**
+     * Set the head node to a specific hash
+     * @param hash - Hash to set as head
+     * @returns True if successful, false otherwise
+     */
     setHead(hash: string): boolean {
         if (this.nodes.has(hash)) {
             this.head = hash;
@@ -213,6 +267,11 @@ export class CtrlZTree {
         return false;
     }
 
+    /**
+     * Get content for a specific node or current head
+     * @param hash - Optional hash of node to get content for
+     * @returns Content of the node
+     */
     getContent(hash?: string): string {
         const targetHash = hash || this.head;
         if (!targetHash || !this.nodes.has(targetHash)) {
@@ -221,6 +280,11 @@ export class CtrlZTree {
         return this.reconstructContent(targetHash);
     }
 
+    /**
+     * Get cursor position for a specific node or current head
+     * @param hash - Optional hash of node to get cursor position for
+     * @returns Cursor position or undefined
+     */
     getCursorPosition(hash?: string): vscode.Position | undefined {
         const targetHash = hash || this.head;
         if (!targetHash || !this.nodes.has(targetHash)) {
@@ -229,53 +293,127 @@ export class CtrlZTree {
         return this.nodes.get(targetHash)!.cursorPosition;
     }
 
+    /**
+     * Get all nodes in the tree
+     * @returns Map of all nodes
+     */
     getAllNodes(): Map<string, TreeNode> {
         return new Map(this.nodes);
     }
 
+    /**
+     * Get the internal root hash
+     * @returns Internal root hash
+     */
     getInternalRootHash(): string {
         return this.trueEmptyRootHash;
     }
 
+    /**
+     * Get the initial snapshot hash
+     * @returns Initial snapshot hash
+     */
     public getInitialSnapshotHash(): string {
         return this.initialSnapshotHash ?? this.trueEmptyRootHash;
     }
 
+    /**
+     * Get the number of nodes in the tree
+     * @returns Number of nodes
+     */
     public getNodeCount(): number {
         return this.nodes.size;
     }
 
+    /**
+     * Prune the tracked documents to keep at most maxTrackedDocuments
+     * @param maxTrackedDocuments - Maximum number of tracked documents to keep
+     */
+    public pruneToMaxTrackedDocuments(maxTrackedDocuments: number): void {
+        // This method is intentionally left empty as the pruning of tracked documents
+        // is handled in the extension.ts file in the getOrCreateTree function
+        // This is a placeholder for future implementation
+    }
+
+    /**
+     * Prune the tree to keep at most maxNodes
+     * @param maxNodes - Maximum number of nodes to keep
+     */
     public pruneToMaxNodes(maxNodes: number): void {
-        if (maxNodes <= 0) return;
-        if (this.nodes.size <= maxNodes) return;
+        if (maxNodes <= 0) {return;}
+        if (this.nodes.size <= maxNodes) {return;}
 
         const nodesToKeep = new Set<string>();
+        nodesToKeep.add(this.trueEmptyRootHash);
 
+        // Keep the head and the newest part of its ancestry. This guarantees
+        // that pruning never leaves the head without a valid parent chain.
         let currentHash = this.head;
+        const headAncestry: string[] = [];
         while (currentHash) {
-            nodesToKeep.add(currentHash);
+            headAncestry.unshift(currentHash);
             const node = this.nodes.get(currentHash);
-            if (!node || node.parent === null) break;
+            if (!node || node.parent === null) {break;}
             currentHash = node.parent;
         }
 
-        if (nodesToKeep.size < maxNodes) {
-            const allNodes = Array.from(this.nodes.entries());
-            const sortedByTime = allNodes.sort((a, b) => b[1].timestamp - a[1].timestamp);
+        for (let i = headAncestry.length - 1; i >= 0 && nodesToKeep.size < maxNodes; i--) {
+            nodesToKeep.add(headAncestry[i]);
+        }
 
-            for (const [hash] of sortedByTime) {
-                if (nodesToKeep.size >= maxNodes) break;
-                nodesToKeep.add(hash);
+        if (this.initialSnapshotHash && nodesToKeep.size < maxNodes) {
+            nodesToKeep.add(this.initialSnapshotHash);
+        }
+
+        const sortedByTime = Array.from(this.nodes.entries())
+            .sort((a, b) => b[1].timestamp - a[1].timestamp);
+        for (const [hash] of sortedByTime) {
+            if (nodesToKeep.size >= maxNodes) {break;}
+            nodesToKeep.add(hash);
+        }
+
+        // Rebase kept nodes whose original parent was removed. Rebuilding the
+        // diff is necessary; otherwise reconstruction would follow a dangling
+        // parent or apply operations against the wrong content.
+        for (const hash of nodesToKeep) {
+            if (hash === this.trueEmptyRootHash) {continue;}
+            const node = this.nodes.get(hash);
+            if (!node) {continue;}
+
+            if (node.parent && nodesToKeep.has(node.parent)) {
+                continue;
+            }
+
+            let rebasedParent = node.parent;
+            while (rebasedParent && !nodesToKeep.has(rebasedParent)) {
+                rebasedParent = this.nodes.get(rebasedParent)?.parent ?? null;
+            }
+            if (!rebasedParent) {
+                rebasedParent = nodesToKeep.has(this.trueEmptyRootHash)
+                    ? this.trueEmptyRootHash
+                    : null;
+            }
+
+            node.parent = rebasedParent;
+            if (rebasedParent) {
+                const parentContent = this.reconstructContent(rebasedParent);
+                const nodeContent = this.reconstructContent(hash);
+                node.diff = serializeDiff(generateDiff(parentContent, nodeContent));
+            } else {
+                node.diff = null;
             }
         }
 
+        // Remove nodes not in nodesToKeep
         for (const hash of this.nodes.keys()) {
             if (!nodesToKeep.has(hash)) {
                 this.nodes.delete(hash);
             }
         }
 
+        // Clean up children references to ensure tree integrity
         for (const node of this.nodes.values()) {
+            // Filter children to only include nodes that still exist
             node.children = node.children.filter(child => this.nodes.has(child));
         }
     }

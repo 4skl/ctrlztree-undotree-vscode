@@ -1,93 +1,259 @@
-:root {
-    --vscode-background: var(--vscode-editor-background, #1e1e1e);
-    --vscode-foreground: var(--vscode-editor-foreground, #d4d4d4);
-    --vscode-accent: var(--vscode-focusBorder, #007acc);
-    --vscode-current: var(--vscode-list-activeSelectionBackground, #094771);
-    --vscode-border: var(--vscode-panel-border, #2d2d30);
-    --vscode-hover: var(--vscode-list-hoverBackground, #2a2d2e);
-}
-html, body {
-    height: 100%;
-}
-
+html,
 body {
-    background-color: var(--vscode-background);
-    color: var(--vscode-foreground);
-    margin: 0;
-    padding: 0;
-    font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
-}
-#toolbar {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 1000;
-    background-color: var(--vscode-background);
-    border: 1px solid var(--vscode-border);
-    border-radius: 3px;
-    padding: 5px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    display: flex;
-    gap: 5px;
-}
-.toolbar-btn {
-    background-color: var(--vscode-button-background, var(--vscode-accent));
-    color: var(--vscode-button-foreground, var(--vscode-foreground));
-    border: none;
-    border-radius: 2px;
-    padding: 6px 12px;
-    cursor: pointer;
-    font-size: 12px;
-    font-family: inherit;
-    transition: background-color 0.2s;
-}
-.toolbar-btn:hover {
-    background-color: var(--vscode-button-hoverBackground, var(--vscode-hover));
-}
-.toolbar-btn:active {
-    background-color: var(--vscode-button-secondaryBackground, var(--vscode-current));
-}
-#reset-btn {
-    background-color: var(--vscode-button-secondaryBackground, #5a5a5a);
-}
-#reset-btn:hover {
-    background-color: var(--vscode-errorBackground, #d73a49);
-}
-#tree-visualization {
     width: 100%;
     height: 100%;
-    border: 1px solid var(--vscode-border);
-    background-color: var(--vscode-background);
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    background: var(--vscode-editor-background, #1e1e1e);
+    color: var(--vscode-foreground, #d4d4d4);
+    font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+    font-size: var(--vscode-font-size, 13px);
+}
+
+#toolbar {
     position: relative;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 44px;
     box-sizing: border-box;
+    padding: 6px 10px;
+    background: var(--vscode-editor-background, #1e1e1e);
+    border-bottom: 1px solid var(--vscode-panel-border, #454545);
 }
-.vis-network canvas {
-    background-color: var(--vscode-background) !important;
+
+#toolbar-left {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.toolbar-title {
     display: block;
+    overflow: hidden;
+    color: var(--vscode-foreground, #cccccc);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 30px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.vis-network:hover {
-    cursor: pointer !important;
+
+#toolbar-right {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
 }
+
+.search-input {
+    width: 176px;
+    height: 30px;
+    box-sizing: border-box;
+    border: 1px solid var(--vscode-input-border, #454545);
+    border-radius: 5px;
+    outline: none;
+    background: var(--vscode-input-background, #3c3c3c);
+    color: var(--vscode-input-foreground, #cccccc);
+    padding: 0 9px;
+    font: inherit;
+    font-size: 12px;
+    transition: width 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.search-input::placeholder {
+    color: var(--vscode-input-placeholderForeground, #888888);
+}
+
+.search-input:focus {
+    width: 220px;
+    border-color: var(--vscode-focusBorder, #007acc);
+    background: var(--vscode-input-background, #3c3c3c);
+}
+
+.toolbar-btn {
+    height: 30px;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: var(--vscode-button-secondaryBackground, #454545);
+    color: var(--vscode-button-secondaryForeground, #ffffff);
+    padding: 0 10px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+.toolbar-btn:hover {
+    background: var(--vscode-button-secondaryHoverBackground, #5a5a5a);
+}
+
+.toolbar-btn:focus-visible,
+.search-input:focus-visible,
+#diff-button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder, #007acc);
+    outline-offset: 2px;
+}
+
+#tree-visualization {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 44px);
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--vscode-foreground, #d4d4d4) 8%, transparent) 1px, transparent 0)
+        0 0 / 20px 20px,
+        var(--vscode-editor-background, #1e1e1e);
+}
+
+#status-bar {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 12;
+    max-width: calc(100% - 20px);
+    height: 24px;
+    box-sizing: border-box;
+    border: 1px solid var(--vscode-widget-border, #454545);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 92%, transparent);
+    color: var(--vscode-descriptionForeground, #888888);
+    padding: 3px 9px;
+    font-size: 11px;
+    line-height: 16px;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
 #diff-button {
     position: absolute;
+    z-index: 100;
     display: none;
-    background-color: var(--vscode-button-background, #0e639c);
+    height: 28px;
+    box-sizing: border-box;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 5px;
+    background: var(--vscode-button-background, #0e639c);
     color: var(--vscode-button-foreground, #ffffff);
-    border: 1px solid var(--vscode-button-border, #0e639c);
-    border-radius: 3px;
-    padding: 4px 12px;
-    font-size: 11px;
-    font-family: var(--vscode-font-family);
+    padding: 0 9px;
     cursor: pointer;
-    white-space: nowrap;
-    z-index: 10000;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-    transition: background-color 0.15s ease;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
 }
+
 #diff-button:hover {
-    background-color: var(--vscode-button-hoverBackground, #1177bb);
+    background: var(--vscode-button-hoverBackground, #1177bb);
 }
+
 #diff-button:active {
-    background-color: var(--vscode-button-hoverBackground, #0d5a8f);
     transform: translateY(1px);
+}
+
+.node-html-label-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.node-html-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    min-width: 96px;
+    max-width: 220px;
+    box-sizing: border-box;
+    border-radius: 5px;
+    color: var(--vscode-foreground, #d4d4d4);
+    padding: 3px 10px;
+    text-align: left;
+    line-height: 1.28;
+    overflow-wrap: anywhere;
+    transform-origin: center;
+    transition: opacity 100ms ease;
+}
+
+.node-html-label-title {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.node-html-label-caption {
+    margin-top: 3px;
+    color: var(--vscode-descriptionForeground, #a0a0a0);
+    font-size: 10.5px;
+    font-weight: 400;
+    white-space: pre-line;
+}
+
+.node-html-label-head {
+    color: #ffffff;
+}
+
+.node-html-label-selected {
+    background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 16%, transparent);
+    box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007acc);
+}
+
+.node-html-label-selected .node-html-label-title {
+    color: var(--vscode-foreground, #ffffff);
+}
+
+.node-html-label-match {
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 18%, transparent);
+    box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007acc);
+}
+
+.node-html-label-muted {
+    opacity: 0.38;
+}
+
+.node-root .node-html-label-title {
+    font-size: 12px;
+}
+
+.node-initial .node-html-label-title {
+    color: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
+}
+
+.node-head .node-html-label-title {
+    color: #ffffff;
+}
+
+@media (max-width: 640px) {
+    #toolbar {
+        gap: 6px;
+        height: 40px;
+        padding: 5px 6px;
+    }
+
+    #toolbar-right {
+        gap: 4px;
+    }
+
+    .search-input {
+        width: 112px;
+    }
+
+    .search-input:focus {
+        width: 148px;
+    }
+
+    .toolbar-btn {
+        padding: 0 7px;
+    }
+
+    #tree-visualization {
+        height: calc(100vh - 40px);
+    }
 }

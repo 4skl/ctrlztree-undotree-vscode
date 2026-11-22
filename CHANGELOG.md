@@ -2,6 +2,18 @@
 
 All notable changes to the "ctrlztree" extension will be documented in this file.
 
+## [0.6.0] - 2026-11-22
+
+### Fixed
+- **Visualization Nodes**: Prevented shortened hash collisions by extending node identifiers until they are unique, ensuring every visible node maps to the correct history state.
+- **Node Navigation**: Restored click-to-navigate behavior while keeping the dedicated diff button for viewing node changes.
+- **Lite Diff Labels**: Nodes now include a concise inline diff summary alongside the short hash and relative time.
+- **Smooth Diff Switching**: Selecting another node updates the existing preview diff editor instead of closing and reopening it.
+- **UI/UX Improvements**: Added a responsive toolbar, document and history status context, fit-to-view control, searchable node filtering, keyboard search navigation, smoother graph edges, and clearer node selection states.
+- **Node Fit and Selection Clarity**: Scaled node labels with the graph, restored click-to-diff and double-click-to-restore behavior, and made the selected node distinct from the current history head.
+- **History Pruning**: Rebased retained nodes to valid ancestors and rebuilt their diffs so pruning cannot leave dangling parents or break content reconstruction.
+- **Diff Deserialization**: Added validation for malformed or structurally invalid diff operations.
+
 ## [0.5.9] - 2026-11-20
 
 ### Improved
